@@ -1,0 +1,240 @@
+package com.kotlinx.inspireface;
+
+import android.graphics.Bitmap;
+import android.os.Bundle;
+import android.util.Log;
+
+import androidx.activity.EdgeToEdge;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
+
+import com.insightface.sdk.inspireface.InspireFace;
+import com.insightface.sdk.inspireface.base.CustomParameter;
+import com.insightface.sdk.inspireface.base.FaceAttributeResult;
+import com.insightface.sdk.inspireface.base.FaceFeature;
+import com.insightface.sdk.inspireface.base.FaceFeatureIdentity;
+import com.insightface.sdk.inspireface.base.FaceInteractionState;
+import com.insightface.sdk.inspireface.base.FaceInteractionsActions;
+import com.insightface.sdk.inspireface.base.FeatureHubConfiguration;
+import com.insightface.sdk.inspireface.base.ImageStream;
+import com.insightface.sdk.inspireface.base.InspireFaceVersion;
+import com.insightface.sdk.inspireface.base.MultipleFaceData;
+import com.insightface.sdk.inspireface.base.Point2f;
+import com.insightface.sdk.inspireface.base.SearchTopKResults;
+import com.insightface.sdk.inspireface.base.Session;
+import com.insightface.sdk.inspireface.utils.SDKUtils;
+
+import java.io.IOException;
+
+public class MainActivity extends AppCompatActivity {
+
+    private final String TAG = "InspireFace";
+
+    void test() {
+        // 获取 SDK 版本
+        InspireFaceVersion version = InspireFace.QueryInspireFaceVersion();
+        Log.i(TAG, "当前 SDK 版本: " + version.major + "." + version.minor + "." + version.patch);
+
+        // 数据库路径
+        String dbPath = "/storage/emulated/0/Android/data/com.kotlinx.inspireface/files/f.db";
+
+        // 创建并配置 FeatureHub（特征中心）
+        FeatureHubConfiguration configuration = InspireFace.CreateFeatureHubConfiguration()
+                .setEnablePersistence(false) // 禁用持久化
+                .setPersistenceDbPath(dbPath) // 数据库路径
+                .setSearchThreshold(0.42f) // 人脸匹配阈值
+                .setSearchMode(InspireFace.SEARCH_MODE_EXHAUSTIVE) // 搜索模式：全量搜索
+                .setPrimaryKeyMode(InspireFace.PK_AUTO_INCREMENT); // 主键模式：自动递增
+
+        boolean enableStatus = InspireFace.FeatureHubDataEnable(configuration);
+        Log.d(TAG, "启用特征数据库状态: " + enableStatus);
+
+        // 设置默认搜索阈值
+        InspireFace.FeatureHubFaceSearchThresholdSetting(0.42f);
+
+        // 初始化 SDK
+        boolean launchStatus = InspireFace.GlobalLaunch(this, InspireFace.PIKACHU);
+        Log.d(TAG, "SDK 启动状态: " + launchStatus);
+        if (!launchStatus) {
+            Log.e(TAG, "SDK 启动失败！");
+            return;
+        }
+
+        // 创建识别参数
+        CustomParameter parameter = InspireFace.CreateCustomParameter()
+                .enableRecognition(true)           // 启用识别
+                .enableFaceQuality(true)           // 启用质量检测
+                .enableFaceAttribute(true)         // 启用属性检测
+                .enableInteractionLiveness(true)   // 启用交互活体
+                .enableLiveness(true)              // 启用静默活体
+                .enableMaskDetect(true);           // 启用口罩检测
+
+        // 创建会话
+        Session session = InspireFace.CreateSession(parameter, InspireFace.DETECT_MODE_ALWAYS_DETECT, 10, -1, -1);
+        Log.i(TAG, "会话句柄: " + session.handle);
+
+        // 设置追踪图像预览宽度
+        InspireFace.SetTrackPreviewSize(session, 320);
+        InspireFace.SetFaceDetectThreshold(session, 0.5f); // 检测阈值
+        InspireFace.SetFilterMinimumFacePixelSize(session, 0); // 最小人脸像素
+
+        // 从 Assets 加载图片
+        Bitmap img = SDKUtils.getImageFromAssetsFile(this, "inspireface/kun.jpg");
+        ImageStream stream = InspireFace.CreateImageStreamFromBitmap(img, InspireFace.CAMERA_ROTATION_0);
+        Log.i(TAG, "图像流句柄: " + stream.handle);
+
+        // 保存图像到文件
+        InspireFace.WriteImageStreamToFile(stream, "/storage/emulated/0/Android/data/com.kotlinx.inspireface/files/out.jpg");
+
+        // 执行人脸追踪
+        MultipleFaceData multipleFaceData = InspireFace.ExecuteFaceTrack(session, stream);
+        Log.i(TAG, "检测到人脸数量: " + multipleFaceData.detectedNum);
+
+        if (multipleFaceData.detectedNum > 0) {
+            // 获取人脸关键点
+            Point2f[] lmk = InspireFace.GetFaceDenseLandmarkFromFaceToken(multipleFaceData.tokens[0]);
+            for (Point2f p : lmk) {
+                Log.i(TAG, "关键点: " + p.x + ", " + p.y);
+            }
+
+            // 提取特征值
+            FaceFeature feature = InspireFace.ExtractFaceFeature(session, stream, multipleFaceData.tokens[0]);
+            Log.i(TAG, "提取特征维度: " + feature.data.length);
+            String strFt = "";
+            for (float f : feature.data) {
+                strFt += f + ", ";
+            }
+            Log.i(TAG, strFt);
+
+            // 插入特征到特征库
+            for (int i = 0; i < 10; i++) {
+                FaceFeatureIdentity identity = FaceFeatureIdentity.create(-1, feature);
+                boolean succ = InspireFace.FeatureHubInsertFeature(identity);
+                if (succ) {
+                    Log.i(TAG, "插入成功，分配 ID: " + identity.id);
+                }
+            }
+
+            // 特征搜索
+            FaceFeatureIdentity searched = InspireFace.FeatureHubFaceSearch(feature);
+            Log.i(TAG, "搜索结果 ID: " + searched.id + ", 相似度: " + searched.searchConfidence);
+
+            // Top-K 检索
+            SearchTopKResults topKResults = InspireFace.FeatureHubFaceSearchTopK(feature, 10);
+            for (int i = 0; i < topKResults.num; i++) {
+                Log.i(TAG, "TopK 结果 ID: " + topKResults.ids[i] + ", 相似度: " + topKResults.confidence[i]);
+            }
+
+            // 更新特征
+            FaceFeature newFeature = new FaceFeature();
+            newFeature.data = new float[InspireFace.GetFeatureLength()];
+            FaceFeatureIdentity identity = FaceFeatureIdentity.create(8, newFeature);
+            boolean updateSucc = InspireFace.FeatureHubFaceUpdate(identity);
+            if (updateSucc) {
+                Log.i(TAG, "更新特征成功，ID: " + 8);
+            }
+
+            // 删除特征
+            boolean removeSucc = InspireFace.FeatureHubFaceRemove(4);
+            if (removeSucc) {
+                Log.i(TAG, "删除特征成功，ID: " + 4);
+            }
+
+            // 重新检索
+            SearchTopKResults topkAgn = InspireFace.FeatureHubFaceSearchTopK(feature, 10);
+            for (int i = 0; i < topkAgn.num; i++) {
+                Log.i(TAG, "重新检索 TopK ID: " + topkAgn.ids[i] + ", 相似度: " + topKResults.confidence[i]);
+            }
+
+            // 获取特征 ID 为 4 和 2 的数据
+            FaceFeatureIdentity queryIdentity = InspireFace.FeatureHubGetFaceIdentity(4);
+            if (queryIdentity != null) {
+                Log.e(TAG, "查询 ID: " + queryIdentity.id);
+            }
+
+            queryIdentity = InspireFace.FeatureHubGetFaceIdentity(2);
+            if (queryIdentity != null) {
+                strFt = "";
+                for (float f : queryIdentity.feature.data) {
+                    strFt += f + ", ";
+                }
+                Log.i(TAG, "查询 ID: " + queryIdentity.id);
+                Log.i(TAG, strFt);
+
+                // 特征比对
+                float comp = InspireFace.FaceComparison(queryIdentity.feature, feature);
+                Log.i(TAG, "比对相似度: " + comp);
+            }
+
+            // 多人管线分析（属性、活体等）
+            CustomParameter pipelineNeedParam = InspireFace.CreateCustomParameter()
+                    .enableFaceQuality(true)
+                    .enableLiveness(true)
+                    .enableMaskDetect(true)
+                    .enableFaceAttribute(true)
+                    .enableInteractionLiveness(true);
+
+            boolean succPipe = InspireFace.MultipleFacePipelineProcess(session, stream, multipleFaceData, pipelineNeedParam);
+            if (succPipe) {
+                Log.i(TAG, "管线分析成功");
+                Log.i(TAG, "RGB 活体分数: " + InspireFace.GetRGBLivenessConfidence(session).confidence[0]);
+                Log.i(TAG, "人脸质量分数: " + InspireFace.GetFaceQualityConfidence(session).confidence[0]);
+                Log.i(TAG, "口罩置信度: " + InspireFace.GetFaceMaskConfidence(session).confidence[0]);
+
+                FaceInteractionState state = InspireFace.GetFaceInteractionStateResult(session);
+                Log.i(TAG, "左眼状态: " + state.leftEyeStatusConfidence[0]);
+                Log.i(TAG, "右眼状态: " + state.rightEyeStatusConfidence[0]);
+
+                FaceInteractionsActions actions = InspireFace.GetFaceInteractionActionsResult(session);
+                Log.i(TAG, "正常: " + actions.normal[0]);
+                Log.i(TAG, "摇头: " + actions.shake[0]);
+                Log.i(TAG, "张嘴: " + actions.jawOpen[0]);
+                Log.i(TAG, "抬头: " + actions.headRaise[0]);
+                Log.i(TAG, "眨眼: " + actions.blink[0]);
+
+                FaceAttributeResult attr = InspireFace.GetFaceAttributeResult(session);
+                Log.i(TAG, "人种: " + attr.race[0]);
+                Log.i(TAG, "性别: " + attr.gender[0]);
+                Log.i(TAG, "年龄段: " + attr.ageBracket[0]);
+            } else {
+                Log.e(TAG, "管线分析失败");
+            }
+        }
+
+        // 打印特征库总数
+        int count = InspireFace.FeatureHubGetFaceCount();
+        Log.i(TAG, "当前特征库人脸数量: " + count);
+
+        // 获取对齐图像并保存
+        Bitmap crop = InspireFace.GetFaceAlignmentImage(session, stream, multipleFaceData.tokens[0]);
+        try {
+            SDKUtils.saveBitmap("/storage/emulated/0/Android/data/com.kotlinx.inspireface/files/", "crop", crop);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        // 释放资源
+        InspireFace.ReleaseImageStream(stream);
+        InspireFace.ReleaseSession(session);
+        InspireFace.FeatureHubDataDisable();
+    }
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        EdgeToEdge.enable(this);
+        setContentView(R.layout.activity_main);
+
+        // 设置适配边距
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
+            Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
+            return insets;
+        });
+
+        // 启动测试流程
+        test();
+    }
+}
