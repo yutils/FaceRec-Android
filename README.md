@@ -1,7 +1,9 @@
 # 基于开源软件 inspireface 的人脸识别demo
 
 参考 
+
 **本项目是基于开源项目 https://github.com/HyperInspire/inspireface-android-sdk 适配的UI界面**  
+
 **本项目是基于开源项目 https://github.com/HyperInspire/InspireFace**  
 
 
