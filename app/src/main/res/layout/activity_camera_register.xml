@@ -14,11 +14,11 @@
             android:layout_height="0dp"
             android:layout_margin="8dp"
             android:background="#000"
-            app:scaleType="fitCenter"
             app:layout_constraintBottom_toTopOf="@+id/ll"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
+            app:layout_constraintTop_toTopOf="parent"
+            app:scaleType="fitCenter" />
 
         <!-- 添加人脸覆盖视图，用于绘制人脸框和关键点 -->
         <com.kotlinx.inspireface.view.FaceOverlayView
@@ -33,37 +33,50 @@
 
         <LinearLayout
             android:id="@+id/ll"
-            android:orientation="horizontal"
             android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/previewView"
-            android:layout_height="wrap_content">
+            app:layout_constraintTop_toBottomOf="@id/previewView">
 
             <EditText
                 android:id="@+id/etName"
                 android:layout_width="0dp"
-                android:layout_weight="2"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
+                android:layout_weight="2"
                 android:hint="请输入姓名" />
+
             <Button
                 android:id="@+id/btnRegister"
-                android:layout_width="0dp"
-                android:layout_weight="1"
-                android:padding="0dp"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="录入"
-                android:layout_marginTop="16dp" />
-            <Button
-                android:id="@+id/btnSwitchCamera"
-                android:layout_width="0dp"
-                android:layout_weight="1"
+                android:layout_marginTop="16dp"
                 android:padding="0dp"
+                android:text="录入" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="切换摄像头"
-                android:layout_marginTop="16dp" />
+                android:orientation="vertical">
+
+                <Button
+                    android:id="@+id/btnSwitchCamera"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:padding="0dp"
+                    android:text="切换摄像头" />
+
+                <Button
+                    android:id="@+id/btnChangeDB"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:padding="0dp"
+                    android:text="切换数据库" />
+
+            </LinearLayout>
         </LinearLayout>
 
     </androidx.constraintlayout.widget.ConstraintLayout>

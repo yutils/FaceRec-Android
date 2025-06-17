@@ -7,21 +7,16 @@ import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import com.insightface.sdk.inspireface.InspireFace
 import com.kotlinx.inspireface.config.InspireFaceConfig
 import com.kotlinx.inspireface.databinding.ActivityRecognizeBinding
-import com.kotlinx.inspireface.db.FaceDatabaseHelper
-import com.insightface.sdk.inspireface.InspireFace
 
 class FaceRecognizeActivity : AppCompatActivity() {
     private lateinit var binding: ActivityRecognizeBinding
-    private lateinit var dbHelper: FaceDatabaseHelper
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityRecognizeBinding.inflate(layoutInflater)
         setContentView(binding.root)
-
-        dbHelper = FaceDatabaseHelper(this)
 
         binding.btnChoose.setOnClickListener {
             activityResultRegistry.register("打开手机中的相册", ActivityResultContracts.StartActivityForResult()) { result ->
@@ -51,8 +46,8 @@ class FaceRecognizeActivity : AppCompatActivity() {
                             val feature = InspireFace.ExtractFaceFeature(InspireFaceConfig.session, stream, faces.tokens[i])
                             //从特征中心搜索人脸特征
                             val result = InspireFace.FeatureHubFaceSearch(feature)
-                            val name = dbHelper.queryName(result.id.toInt())
-                            if (name.isEmpty()) {
+                            val name = InspireFaceConfig.dbHelper?.queryName(result.id.toInt())
+                            if (name.isNullOrEmpty()) {
                                 Toast.makeText(this, "未找到人脸", Toast.LENGTH_SHORT).show(); return@register
                             }
                             val endTime2 = System.currentTimeMillis() - startTime2

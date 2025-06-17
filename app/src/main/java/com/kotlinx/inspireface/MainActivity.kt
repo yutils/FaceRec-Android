@@ -22,7 +22,7 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         //初始化人脸识别
-        InspireFaceConfig.init(application)
+        InspireFaceConfig.init(MyApp.instance)
 
         binding.btnRegister.setOnClickListener {
             startActivity(Intent(this, FaceRegisterActivity::class.java))

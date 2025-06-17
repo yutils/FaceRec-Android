@@ -17,18 +17,15 @@ import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
-import com.kotlinx.inspireface.config.InspireFaceConfig
-import com.kotlinx.inspireface.config.InspireFaceConfig.customParameter
-import com.kotlinx.inspireface.databinding.ActivityCameraRegisterBinding
-import com.kotlinx.inspireface.db.FaceDatabaseHelper
 import com.insightface.sdk.inspireface.InspireFace
 import com.insightface.sdk.inspireface.base.FaceFeatureIdentity
 import com.insightface.sdk.inspireface.base.Point2f
+import com.kotlinx.inspireface.config.InspireFaceConfig
+import com.kotlinx.inspireface.databinding.ActivityCameraRegisterBinding
 import java.util.concurrent.Executors
 
 class FaceCameraRegisterActivity : AppCompatActivity() {
     private lateinit var binding: ActivityCameraRegisterBinding
-    private lateinit var dbHelper: FaceDatabaseHelper
     private val executor = Executors.newSingleThreadExecutor()
     private var isFrontCamera = true
     private var cameraProvider: ProcessCameraProvider? = null
@@ -39,8 +36,6 @@ class FaceCameraRegisterActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityCameraRegisterBinding.inflate(layoutInflater)
         setContentView(binding.root)
-
-        dbHelper = FaceDatabaseHelper(this)
 
         // 设置 PreviewView 水平翻转（镜像）
         //binding.previewView.scaleX = -1f
@@ -66,6 +61,20 @@ class FaceCameraRegisterActivity : AppCompatActivity() {
             binding.btnRegister.isEnabled = false
             binding.etName.isEnabled = false
             captureNextFaceFrame = true
+        }
+
+        //切换数据库
+        binding.btnChangeDB.setOnClickListener {
+            if (InspireFaceConfig.dbHelper?.dbPath?.endsWith("face_name_1.db") == false) {
+                val persistenceDbPath: String = application.let { (it.getExternalFilesDir("")?.absolutePath ?: it.filesDir.path) + "/face_characteristic_1.db" }
+                val faceNameDbPath: String = application.let { (it.getExternalFilesDir("")?.absolutePath ?: it.filesDir.path) + "/face_name_1.db" }
+                InspireFaceConfig.setDB(persistenceDbPath, faceNameDbPath)
+            } else {
+                val persistenceDbPath: String = application.let { (it.getExternalFilesDir("")?.absolutePath ?: it.filesDir.path) + "/face_characteristic_2.db" }
+                val faceNameDbPath: String = application.let { (it.getExternalFilesDir("")?.absolutePath ?: it.filesDir.path) + "/face_name_2.db" }
+                InspireFaceConfig.setDB(persistenceDbPath, faceNameDbPath)
+            }
+            Toast.makeText(this, "切换数据库成功", Toast.LENGTH_SHORT).show()
         }
     }
 

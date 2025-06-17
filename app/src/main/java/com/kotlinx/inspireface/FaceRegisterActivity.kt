@@ -14,7 +14,6 @@ import androidx.core.graphics.drawable.toBitmap
 import androidx.core.view.isVisible
 import com.kotlinx.inspireface.config.InspireFaceConfig
 import com.kotlinx.inspireface.databinding.ActivityRegisterBinding
-import com.kotlinx.inspireface.db.FaceDatabaseHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -24,14 +23,11 @@ import java.text.DecimalFormat
 
 class FaceRegisterActivity : AppCompatActivity() {
     private lateinit var binding: ActivityRegisterBinding
-    private lateinit var dbHelper: FaceDatabaseHelper
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityRegisterBinding.inflate(layoutInflater)
         setContentView(binding.root)
-
-        dbHelper = FaceDatabaseHelper(this)
 
         //  选择图片按钮
         binding.btnChoose.setOnClickListener {

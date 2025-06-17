@@ -17,6 +17,7 @@
         android:roundIcon="@mipmap/logo"
         android:supportsRtl="true"
         android:theme="@style/Theme.InspireFaceExample"
+        android:name=".MyApp"
         tools:targetApi="31">
         <activity
             android:name=".MainActivity"

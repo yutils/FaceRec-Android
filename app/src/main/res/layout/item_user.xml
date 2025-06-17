@@ -29,10 +29,9 @@
         android:text="姓名: "
         android:textSize="16sp"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toStartOf="@id/btnDelete"
+        app:layout_constraintEnd_toStartOf="@id/btnChangeName"
         app:layout_constraintStart_toEndOf="@id/tvId"
         app:layout_constraintTop_toTopOf="parent" />
-
     <Button
         android:id="@+id/btnDelete"
         android:layout_width="wrap_content"
@@ -40,6 +39,15 @@
         android:text="删除"
         android:padding="0dp"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <Button
+        android:id="@+id/btnChangeName"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:padding="0dp"
+        android:text="修改名称"
+        app:layout_constraintEnd_toStartOf="@+id/btnDelete"
         app:layout_constraintTop_toTopOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

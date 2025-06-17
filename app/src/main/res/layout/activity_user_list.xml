@@ -34,8 +34,17 @@
         android:text="删除全部用户"
         android:paddingTop="0dp"
         android:paddingBottom="0dp"
-
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/tvTitle" />
+
+    <Button
+        android:id="@+id/btnChangeDB"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:paddingTop="0dp"
+        android:paddingBottom="0dp"
+        android:text="切换数据库"
+        app:layout_constraintEnd_toStartOf="@+id/btnDeleteAll"
         app:layout_constraintTop_toBottomOf="@+id/tvTitle" />
 
     <androidx.recyclerview.widget.RecyclerView

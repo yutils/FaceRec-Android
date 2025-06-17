@@ -35,31 +35,45 @@
             android:id="@+id/ll"
             android:layout_width="match_parent"
             android:layout_height="120dp"
+            android:gravity="center_vertical"
             android:orientation="horizontal"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            android:gravity="center_vertical"
             app:layout_constraintTop_toBottomOf="@id/previewView">
 
             <TextView
                 android:id="@+id/tvResult"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_weight="2"
+                android:layout_weight="1"
                 android:background="#F5F5F5"
                 android:padding="16dp"
                 android:text="识别结果"
                 android:textColor="#000"
                 android:textSize="14sp" />
 
-            <Button
-                android:id="@+id/btnSwitchCamera"
-                android:layout_width="0dp"
+            <LinearLayout
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:padding="0dp"
-                android:text="切换摄像头" />
+                android:orientation="vertical">
+
+                <Button
+                    android:id="@+id/btnSwitchCamera"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:padding="0dp"
+                    android:text="切换摄像头" />
+
+                <Button
+                    android:id="@+id/btnChangeDB"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:padding="0dp"
+                    android:text="切换数据库" />
+
+            </LinearLayout>
+
         </LinearLayout>
 
     </androidx.constraintlayout.widget.ConstraintLayout>

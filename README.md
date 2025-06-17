@@ -38,7 +38,7 @@
 
 哦，还有一个重要的事情，我之前在退出摄像头页面的时候释放代码就崩溃了，研究了半天
 ```kotlin
-    InspireFace.ReleaseSession(session)
+InspireFace.ReleaseSession(session)
 InspireFace.FeatureHubDataDisable()
 InspireFace.GlobalTerminate()
 ```

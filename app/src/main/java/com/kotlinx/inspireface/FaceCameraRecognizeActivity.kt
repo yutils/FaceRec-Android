@@ -16,16 +16,14 @@ import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
-import com.kotlinx.inspireface.config.InspireFaceConfig
-import com.kotlinx.inspireface.databinding.ActivityCameraRecognizeBinding
-import com.kotlinx.inspireface.db.FaceDatabaseHelper
 import com.insightface.sdk.inspireface.InspireFace
 import com.insightface.sdk.inspireface.base.Point2f
+import com.kotlinx.inspireface.config.InspireFaceConfig
+import com.kotlinx.inspireface.databinding.ActivityCameraRecognizeBinding
 import java.util.concurrent.Executors
 
 class FaceCameraRecognizeActivity : AppCompatActivity() {
     private lateinit var binding: ActivityCameraRecognizeBinding
-    private lateinit var dbHelper: FaceDatabaseHelper
     private val executor = Executors.newSingleThreadExecutor()
     private var isFrontCamera = true
     private var cameraProvider: ProcessCameraProvider? = null
@@ -34,7 +32,6 @@ class FaceCameraRecognizeActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityCameraRecognizeBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        dbHelper = FaceDatabaseHelper(this)
         // 设置 PreviewView 水平翻转（镜像）
         // binding.previewView.scaleX = if (lensFacing) -1f else 1f
 
@@ -49,6 +46,20 @@ class FaceCameraRecognizeActivity : AppCompatActivity() {
         binding.btnSwitchCamera.setOnClickListener {
             isFrontCamera = !isFrontCamera
             startCamera() // 重启相机以应用新设置
+        }
+
+        //切换数据库
+        binding.btnChangeDB.setOnClickListener {
+            if (InspireFaceConfig.dbHelper?.dbPath?.endsWith("face_name_1.db") == false) {
+                val persistenceDbPath: String = application.let { (it.getExternalFilesDir("")?.absolutePath ?: it.filesDir.path) + "/face_characteristic_1.db" }
+                val faceNameDbPath: String = application.let { (it.getExternalFilesDir("")?.absolutePath ?: it.filesDir.path) + "/face_name_1.db" }
+                InspireFaceConfig.setDB(persistenceDbPath, faceNameDbPath)
+            } else {
+                val persistenceDbPath: String = application.let { (it.getExternalFilesDir("")?.absolutePath ?: it.filesDir.path) + "/face_characteristic_2.db" }
+                val faceNameDbPath: String = application.let { (it.getExternalFilesDir("")?.absolutePath ?: it.filesDir.path) + "/face_name_2.db" }
+                InspireFaceConfig.setDB(persistenceDbPath, faceNameDbPath)
+            }
+            Toast.makeText(this, "切换数据库成功", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -185,9 +196,9 @@ class FaceCameraRecognizeActivity : AppCompatActivity() {
                     val feature = InspireFace.ExtractFaceFeature(InspireFaceConfig.session, stream, faces.tokens[i])
                     //从特征中心搜索人脸特征
                     val result = InspireFace.FeatureHubFaceSearch(feature)
-                    val name = dbHelper.queryName(result.id.toInt())
+                    val name = InspireFaceConfig.dbHelper?.queryName(result.id.toInt())
                     names[i] = "$name ${String.format("%.2f", result.searchConfidence * 100.0)}%"
-                    if (name.isEmpty()) {
+                    if (name.isNullOrEmpty()) {
                         runOnUiThread {
                             Toast.makeText(this, "未匹配到用户", Toast.LENGTH_SHORT).show()
                         }
