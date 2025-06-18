@@ -11,10 +11,12 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraInfoUnavailableException
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import com.insightface.sdk.inspireface.InspireFace
 import com.insightface.sdk.inspireface.base.Point2f
@@ -40,12 +42,12 @@ class FaceCameraRecognizeActivity : AppCompatActivity() {
             // 无权限
             if (!it) return@register Toast.makeText(this, "需要相机权限才能使用此功能", Toast.LENGTH_SHORT).show()
             // 权限已授予，启动相机
-            startCamera()
+            startCamera(binding.previewView)
         }.run { launch(Manifest.permission.CAMERA) }
         // 切换摄像头
         binding.btnSwitchCamera.setOnClickListener {
             isFrontCamera = !isFrontCamera
-            startCamera() // 重启相机以应用新设置
+            startCamera(binding.previewView) // 重启相机以应用新设置
         }
 
         //切换数据库
@@ -63,7 +65,8 @@ class FaceCameraRecognizeActivity : AppCompatActivity() {
         }
     }
 
-    private fun startCamera() {
+    //启动相机
+    private fun startCamera(previewView: PreviewView) {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
         cameraProviderFuture.addListener({
             try {
@@ -80,9 +83,7 @@ class FaceCameraRecognizeActivity : AppCompatActivity() {
                     ).build()
                 )
                     .build()
-                    .also {
-                        it.setSurfaceProvider(binding.previewView.surfaceProvider)
-                    }
+                    .also { it.setSurfaceProvider(previewView.surfaceProvider) }
 
                 // 构建图像分析用例，使用 ResolutionSelector
                 val imageAnalysis = ImageAnalysis.Builder()
@@ -98,29 +99,7 @@ class FaceCameraRecognizeActivity : AppCompatActivity() {
                     .build()
 
                 imageAnalysis.setAnalyzer(executor) { imageProxy ->
-
-                    //获取 bitmap
-                    var bitmap = imageProxy.toBitmap()
-                    //获取图像旋转角度
-                    val rotationDegrees = imageProxy.imageInfo.rotationDegrees
-                    // 旋转 bitmap
-                    val matrix = Matrix()
-                    if (rotationDegrees != 0) {
-                        matrix.postRotate(rotationDegrees.toFloat())
-                    }
-                    // 如果是前置摄像头，可能需要镜像翻转
-                    if (isFrontCamera) {
-                        matrix.postScale(-1f, 1f, bitmap.width / 2f, bitmap.height / 2f)
-                    }
-                    bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-                    try {
-                        if (isDestroyed) return@setAnalyzer
-                        processImage(bitmap)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    } finally {
-                        imageProxy.close()
-                    }
+                    processImage(imageProxy)
                 }
 
                 // 解绑之前的所有用例
@@ -129,10 +108,20 @@ class FaceCameraRecognizeActivity : AppCompatActivity() {
                 // 尝试绑定所选摄像头
                 val cameraSelector = if (isFrontCamera) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
 
+                //判断是否有该摄像头
+                fun hasCamera(cameraProvider: ProcessCameraProvider, cameraSelector: CameraSelector): Boolean {
+                    return try {
+                        cameraProvider.hasCamera(cameraSelector)
+                    } catch (e: CameraInfoUnavailableException) {
+                        e.printStackTrace()
+                        false
+                    }
+                }
                 // 检查设备是否有所选摄像头
                 if (hasCamera(cameraProvider!!, cameraSelector)) {
                     // 有所选摄像头，绑定
-                    cameraProvider?.bindToLifecycle(this, cameraSelector, preview, imageAnalysis)
+                    val camera = cameraProvider?.bindToLifecycle(this, cameraSelector, preview, imageAnalysis)
+                    val cameraInfo = camera?.cameraInfo
                 } else {
                     // 没有所选摄像头，尝试切换到另一个
                     val alternativeSelector = if (isFrontCamera) CameraSelector.DEFAULT_BACK_CAMERA else CameraSelector.DEFAULT_FRONT_CAMERA
@@ -159,17 +148,33 @@ class FaceCameraRecognizeActivity : AppCompatActivity() {
         }, ContextCompat.getMainExecutor(this))
     }
 
-    //判断是否有该摄像头
-    private fun hasCamera(cameraProvider: ProcessCameraProvider, cameraSelector: CameraSelector): Boolean {
-        return try {
-            cameraProvider.hasCamera(cameraSelector)
-        } catch (e: CameraInfoUnavailableException) {
+    //将ImageProxy转换为Bitmap
+    private fun processImage(imageProxy: ImageProxy) {
+        try {
+            // 获取 bitmap
+            var bitmap = imageProxy.toBitmap()
+            // 获取图像旋转角度
+            val rotationDegrees = imageProxy.imageInfo.rotationDegrees
+            // 旋转 bitmap
+            val matrix = Matrix()
+            if (rotationDegrees != 0) {
+                matrix.postRotate(rotationDegrees.toFloat())
+            }
+            // 如果是前置摄像头，可能需要镜像翻转
+            if (isFrontCamera) {
+                matrix.postScale(-1f, 1f, bitmap.width / 2f, bitmap.height / 2f)
+            }
+            bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+            processBitmap(bitmap)
+        } catch (e: Exception) {
             e.printStackTrace()
-            false
+        } finally {
+            imageProxy.close()
         }
     }
 
-    private fun processImage(bitmap: Bitmap) {
+    //处理Bitmap
+    private fun processBitmap(bitmap: Bitmap) {
         val startTime1 = System.currentTimeMillis()
         //-------------------------------------------核心逻辑-------------------------------------------
         val stream = InspireFace.CreateImageStreamFromBitmap(bitmap, InspireFace.CAMERA_ROTATION_0)

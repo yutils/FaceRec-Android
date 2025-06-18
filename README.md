@@ -32,7 +32,7 @@
 | ![预览](doc/03.jpg) | ![预览](doc/04.jpg) |
 
 
-大家可以自己下载玩一玩，再release里面有apk文件  
+大家可以自己下载玩一玩，[在release里面有apk文件。](releases)
 觉得不错给我个star吧
 
 
