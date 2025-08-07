@@ -11,6 +11,7 @@ import com.insightface.sdk.inspireface.InspireFace
 import com.kotlinx.inspireface.config.InspireFaceConfig
 import com.kotlinx.inspireface.databinding.ActivityRecognizeBinding
 
+//人脸识别，相册选取
 class FaceRecognizeActivity : AppCompatActivity() {
     private lateinit var binding: ActivityRecognizeBinding
     override fun onCreate(savedInstanceState: Bundle?) {

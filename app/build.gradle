@@ -3,21 +3,17 @@ plugins {
     alias(libs.plugins.kotlin.android)
     id("kotlin-kapt")
 }
-
 android {
     namespace 'com.kotlinx.inspireface'
     compileSdk 35
-
     defaultConfig {
         applicationId "com.kotlinx.inspireface"
-        minSdk 24
+        minSdk 22
         targetSdk 35
         versionCode 1
         versionName "0.0.1"
-
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
-
     buildTypes {
         release {
             minifyEnabled false
@@ -25,11 +21,11 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
     kotlinOptions {
-        jvmTarget = '1.8'
+        jvmTarget = '17'
     }
     buildFeatures {
         dataBinding = true
@@ -37,7 +33,6 @@ android {
         viewBinding = true
     }
 }
-
 dependencies {
     implementation libs.appcompat
     implementation libs.material
@@ -49,8 +44,6 @@ dependencies {
     androidTestImplementation libs.espresso.core
 //    implementation libs.inspireface.android.sdk
     implementation project(':inspireface')
-
-
     // CameraX 核心库
     implementation libs.camera.core
     implementation libs.camera.camera2

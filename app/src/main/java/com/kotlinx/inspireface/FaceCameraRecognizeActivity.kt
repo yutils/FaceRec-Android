@@ -21,9 +21,13 @@ import androidx.core.content.ContextCompat
 import com.insightface.sdk.inspireface.InspireFace
 import com.insightface.sdk.inspireface.base.Point2f
 import com.kotlinx.inspireface.config.InspireFaceConfig
+import com.kotlinx.inspireface.config.InspireFaceConfig.inspireFaceMutex
 import com.kotlinx.inspireface.databinding.ActivityCameraRecognizeBinding
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.Executors
 
+//人脸识别，相机实时获取
 class FaceCameraRecognizeActivity : AppCompatActivity() {
     private lateinit var binding: ActivityCameraRecognizeBinding
     private val executor = Executors.newSingleThreadExecutor()
@@ -99,7 +103,9 @@ class FaceCameraRecognizeActivity : AppCompatActivity() {
                     .build()
 
                 imageAnalysis.setAnalyzer(executor) { imageProxy ->
-                    processImage(imageProxy)
+                    InspireFaceConfig.mutex {   //互斥锁，防止这帧没处理完 InspireFace.ReleaseSession(session) 导致崩溃
+                        processImage(imageProxy)
+                    }
                 }
 
                 // 解绑之前的所有用例

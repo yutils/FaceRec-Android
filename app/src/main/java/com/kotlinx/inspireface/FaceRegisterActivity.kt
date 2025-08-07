@@ -21,6 +21,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.DecimalFormat
 
+//人脸注册,相册录入
 class FaceRegisterActivity : AppCompatActivity() {
     private lateinit var binding: ActivityRegisterBinding
 

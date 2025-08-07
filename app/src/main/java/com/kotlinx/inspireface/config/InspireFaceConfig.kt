@@ -9,11 +9,17 @@ import com.insightface.sdk.inspireface.base.CustomParameter
 import com.insightface.sdk.inspireface.base.FaceFeatureIdentity
 import com.insightface.sdk.inspireface.base.Session
 import com.kotlinx.inspireface.db.FaceDatabaseHelper
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 object InspireFaceConfig {
     private val TAG = "InspireFace"
     var dbHelper: FaceDatabaseHelper? = null
     private var context: Application? = null
+
+    // 创建一个互斥锁，防止正在处理照片时候，InspireFace.ReleaseSession(session)导致崩溃
+    val inspireFaceMutex = Mutex()
 
     //识别参数
     val customParameter: CustomParameter by lazy {
@@ -104,15 +110,23 @@ object InspireFaceConfig {
     }
 
     fun onDestroy() {
-        //一定要保证每个调用InspireFace的线程都执行完毕
-        Thread {
-            Thread.sleep(500) // 让其处理完最后一帧
+        //互斥锁，保证调用ReleaseSession时，其他的互斥线程都执行完毕
+        mutex {
             InspireFace.ReleaseSession(session)
             session = null
             dbHelper?.close()
             dbHelper = null
             InspireFace.FeatureHubDataDisable()
             InspireFace.GlobalTerminate()
-        }.start()
+        }
+    }
+
+    //线程互斥
+    fun mutex(m: () -> Unit) {
+        runBlocking {
+            inspireFaceMutex.withLock {
+                m.invoke()
+            }
+        }
     }
 }

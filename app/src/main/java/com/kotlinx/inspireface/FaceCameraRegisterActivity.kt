@@ -26,6 +26,7 @@ import com.kotlinx.inspireface.config.InspireFaceConfig
 import com.kotlinx.inspireface.databinding.ActivityCameraRegisterBinding
 import java.util.concurrent.Executors
 
+//人脸识别，相机实时获取
 class FaceCameraRegisterActivity : AppCompatActivity() {
     private lateinit var binding: ActivityCameraRegisterBinding
     private val executor = Executors.newSingleThreadExecutor()
@@ -79,6 +80,7 @@ class FaceCameraRegisterActivity : AppCompatActivity() {
             Toast.makeText(this, "切换数据库成功", Toast.LENGTH_SHORT).show()
         }
     }
+
     //启动相机
     private fun startCamera(previewView: PreviewView) {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
@@ -113,7 +115,9 @@ class FaceCameraRegisterActivity : AppCompatActivity() {
                     .build()
 
                 imageAnalysis.setAnalyzer(executor) { imageProxy ->
-                    processImage(imageProxy)
+                    InspireFaceConfig.mutex {   //互斥锁，防止这帧没处理完 InspireFace.ReleaseSession(session) 导致崩溃
+                        processImage(imageProxy)
+                    }
                 }
 
                 // 解绑之前的所有用例
@@ -245,7 +249,6 @@ class FaceCameraRegisterActivity : AppCompatActivity() {
             InspireFace.ReleaseImageStream(stream)
         }
         Log.i("processImage", "耗时：${System.currentTimeMillis() - startTime} ms")
-
         //-------------------------------------------核心逻辑-------------------------------------------
     }
 

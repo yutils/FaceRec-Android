@@ -4,19 +4,20 @@ import android.app.AlertDialog
 import android.app.Dialog
 import android.os.Bundle
 import android.view.LayoutInflater
-import android.view.View
 import android.view.ViewGroup
-import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.insightface.sdk.inspireface.InspireFace
 import com.kotlinx.inspireface.config.InspireFaceConfig
 import com.kotlinx.inspireface.databinding.ActivityUserListBinding
+import com.kotlinx.inspireface.databinding.ItemUserBinding
 import com.kotlinx.inspireface.db.User
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +35,7 @@ class UserListActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         adapter = UserListAdapter(
+            // 删除
             onDeleteClick = { user ->
                 // 显示删除确认弹窗
                 AlertDialog.Builder(this)
@@ -53,7 +55,8 @@ class UserListActivity : AppCompatActivity() {
                     .setNegativeButton("取消", null)
                     .show()
             },
-            onItemClick = { user ->
+            // 修改名称事件
+            onChangeClick = { user ->
                 // 显示修改名称弹窗
                 val dialogView = layoutInflater.inflate(R.layout.dialog_edit_name, null)
                 val etName = dialogView.findViewById<EditText>(R.id.etName)
@@ -166,40 +169,33 @@ class UserListActivity : AppCompatActivity() {
     }
 }
 
-class UserListAdapter(
-    private val onDeleteClick: (User) -> Unit,
-    private val onItemClick: (User) -> Unit,
-) : RecyclerView.Adapter<UserListAdapter.ViewHolder>() {
-    private var users: List<User> = emptyList()
+//ListAdapter,高效更新、内置动画、差异计算默认在后台线程进行，不会阻塞主线程、简化Adapter实现
+class UserListAdapter(private val onDeleteClick: (User) -> Unit, private val onChangeClick: (User) -> Unit) : ListAdapter<User, UserListAdapter.VH>(UserDiffCallback()) {
+    //ViewHolder
+    class VH(
+        parent: ViewGroup,
+        val binding: ItemUserBinding =
+            ItemUserBinding.inflate(LayoutInflater.from(parent.context), parent, false)
+    ) : RecyclerView.ViewHolder(binding.root)
 
-    fun submitList(newUsers: List<User>) {
-        users = newUsers
-        notifyDataSetChanged()
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
+        return VH(parent)
     }
-
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-        val view = LayoutInflater.from(parent.context).inflate(R.layout.item_user, parent, false)
-        return ViewHolder(view)
-    }
-
-    override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        val user = users[position]
-        holder.bind(user)
-    }
-
-    override fun getItemCount(): Int = users.size
-
-    inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        private val tvId: TextView = itemView.findViewById(R.id.tvId)
-        private val tvName: TextView = itemView.findViewById(R.id.tvName)
-        private val btnDelete: Button = itemView.findViewById(R.id.btnDelete)
-        private val btnChangeName: Button = itemView.findViewById(R.id.btnChangeName)
-
-        fun bind(user: User) {
-            tvId.text = "ID: ${user.id}"
-            tvName.text = "姓名: ${user.name}"
-            btnDelete.setOnClickListener { onDeleteClick(users[adapterPosition]) }
-            btnChangeName.setOnClickListener { onItemClick(users[adapterPosition]) }
+    override fun onBindViewHolder(holder: VH, position: Int) {
+        val item = getItem(position)
+        holder.binding.apply {
+            tvId.text = "ID: ${item.id}"
+            tvName.text = "姓名: ${item.name}"
+            btnDelete.setOnClickListener { onDeleteClick(item) }
+            btnChangeName.setOnClickListener { onChangeClick(item) }
         }
+    }
+}
+class UserDiffCallback : DiffUtil.ItemCallback<User>() {
+    override fun areItemsTheSame(oldItem: User, newItem: User): Boolean {
+        return oldItem.id == newItem.id  // 判断两个对象是否代表同一个项目（通常比较唯一标识符）
+    }
+    override fun areContentsTheSame(oldItem: User, newItem: User): Boolean {
+        return oldItem == newItem   // 判断两个项目的内容是否相同（比较所有需要显示的字段）
     }
 }
