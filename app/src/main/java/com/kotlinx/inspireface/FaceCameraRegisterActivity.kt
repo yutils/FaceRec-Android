@@ -116,7 +116,8 @@ class FaceCameraRegisterActivity : AppCompatActivity() {
 
                 imageAnalysis.setAnalyzer(executor) { imageProxy ->
                     InspireFaceConfig.mutex {   //互斥锁，防止这帧没处理完 InspireFace.ReleaseSession(session) 导致崩溃
-                        processImage(imageProxy)
+                        val bitmap = imageToBitmap(imageProxy)
+                        bitmap?.let { processBitmap(it) }
                     }
                 }
 
@@ -167,7 +168,7 @@ class FaceCameraRegisterActivity : AppCompatActivity() {
     }
 
     //将ImageProxy转换为Bitmap
-    private fun processImage(imageProxy: ImageProxy) {
+    private fun imageToBitmap(imageProxy: ImageProxy): Bitmap? {
         try {
             // 获取 bitmap
             var bitmap = imageProxy.toBitmap()
@@ -183,9 +184,10 @@ class FaceCameraRegisterActivity : AppCompatActivity() {
                 matrix.postScale(-1f, 1f, bitmap.width / 2f, bitmap.height / 2f)
             }
             bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-            processBitmap(bitmap)
+            return bitmap
         } catch (e: Exception) {
             e.printStackTrace()
+            return null
         } finally {
             imageProxy.close()
         }
@@ -219,18 +221,19 @@ class FaceCameraRegisterActivity : AppCompatActivity() {
             runOnUiThread {
                 binding.faceOverlayView.setFacePoints(faceList)
             }
-            //检测到多张人脸
-            if (faces.detectedNum > 1) {
-                return
-            }
+            //检测到多张人脸,多张人脸取最大脸
+            //if (faces.detectedNum > 1) { return }
             //  判断是否需要处理下一帧
             if (!captureNextFaceFrame) return
             captureNextFaceFrame = false
             if (InspireFaceConfig.session == null) return
+            val name = binding.etName.text.toString().trim()
+            //保存特征值前先删除重复
+            InspireFaceConfig.deleteByName(name)
+            //保存
             val feature = InspireFace.ExtractFaceFeature(InspireFaceConfig.session, stream, faces.tokens[0])
             val identity = FaceFeatureIdentity.create(-1, feature)
             if (InspireFace.FeatureHubInsertFeature(identity)) {
-                val name = binding.etName.text.toString().trim()
                 InspireFaceConfig.dbHelper?.insertName(identity.id.toInt(), name)
                 runOnUiThread {
                     Toast.makeText(this, "录入成功", Toast.LENGTH_SHORT).show()

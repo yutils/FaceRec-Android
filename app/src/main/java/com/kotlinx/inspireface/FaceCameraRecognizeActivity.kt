@@ -21,10 +21,7 @@ import androidx.core.content.ContextCompat
 import com.insightface.sdk.inspireface.InspireFace
 import com.insightface.sdk.inspireface.base.Point2f
 import com.kotlinx.inspireface.config.InspireFaceConfig
-import com.kotlinx.inspireface.config.InspireFaceConfig.inspireFaceMutex
 import com.kotlinx.inspireface.databinding.ActivityCameraRecognizeBinding
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.Executors
 
 //人脸识别，相机实时获取
@@ -104,7 +101,8 @@ class FaceCameraRecognizeActivity : AppCompatActivity() {
 
                 imageAnalysis.setAnalyzer(executor) { imageProxy ->
                     InspireFaceConfig.mutex {   //互斥锁，防止这帧没处理完 InspireFace.ReleaseSession(session) 导致崩溃
-                        processImage(imageProxy)
+                        val bitmap = imageToBitmap(imageProxy)
+                        bitmap?.let { processBitmap(it) }
                     }
                 }
 
@@ -155,7 +153,7 @@ class FaceCameraRecognizeActivity : AppCompatActivity() {
     }
 
     //将ImageProxy转换为Bitmap
-    private fun processImage(imageProxy: ImageProxy) {
+    private fun imageToBitmap(imageProxy: ImageProxy): Bitmap? {
         try {
             // 获取 bitmap
             var bitmap = imageProxy.toBitmap()
@@ -171,9 +169,10 @@ class FaceCameraRecognizeActivity : AppCompatActivity() {
                 matrix.postScale(-1f, 1f, bitmap.width / 2f, bitmap.height / 2f)
             }
             bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-            processBitmap(bitmap)
+            return bitmap
         } catch (e: Exception) {
             e.printStackTrace()
+            return null
         } finally {
             imageProxy.close()
         }
@@ -207,7 +206,7 @@ class FaceCameraRecognizeActivity : AppCompatActivity() {
                     val feature = InspireFace.ExtractFaceFeature(InspireFaceConfig.session, stream, faces.tokens[i])
                     //从特征中心搜索人脸特征
                     val result = InspireFace.FeatureHubFaceSearch(feature)
-                    val name = InspireFaceConfig.dbHelper?.queryName(result.id.toInt())
+                    val name = InspireFaceConfig.dbHelper?.queryNameById(result.id.toInt())
                     names[i] = "$name ${String.format("%.2f", result.searchConfidence * 100.0)}%"
                     if (name.isNullOrEmpty()) {
                         runOnUiThread {

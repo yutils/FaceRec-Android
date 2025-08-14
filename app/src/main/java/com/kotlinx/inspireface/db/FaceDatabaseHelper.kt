@@ -30,8 +30,8 @@ class FaceDatabaseHelper(context: Application, val dbPath: String = context.let 
     }
 
     // 根据 id 查询名称
-    fun queryName(id: Int): String {
-        var name = "未知"
+    fun queryNameById(id: Int): String? {
+        var name : String? = null
         readableDatabase.use { db ->
             db.rawQuery("SELECT name FROM face_info WHERE id = ?", arrayOf(id.toString())).use { cursor ->
                 if (cursor.moveToFirst()) {
@@ -42,10 +42,39 @@ class FaceDatabaseHelper(context: Application, val dbPath: String = context.let 
         return name
     }
 
+    // 根据 Name 查询全部用户
+    fun queryNameByName(name: String): MutableList<User> {
+        val list = mutableListOf<User>()
+        readableDatabase.use { db ->
+            db.rawQuery("SELECT * FROM face_info WHERE name = ?", arrayOf(name)).use { cursor ->
+                // 遍历查询结果
+                while (cursor.moveToNext()) {
+                    // 获取字段索引
+                    val idIndex = cursor.getColumnIndex("id")
+                    val nameIndex = cursor.getColumnIndex("name")
+                    // 从游标中获取数据
+                    val id = cursor.getInt(idIndex)
+                    val userName = cursor.getString(nameIndex)
+
+                    // 创建User对象并添加到列表
+                    list.add(User(id, userName))
+                }
+            }
+        }
+        return list
+    }
+
     // 根据 id 删除名称
-    fun deleteName(id: Int) {
-        writableDatabase.use { db ->
+    fun deleteById(id: Int): Int {
+        return writableDatabase.use { db ->
             db.delete("face_info", "id = ?", arrayOf(id.toString()))
+        }
+    }
+
+    // 根据 name 删除名称
+    fun deleteByName(name: String): Int {
+        return writableDatabase.use { db ->
+            db.delete("face_info", "name = ?", arrayOf(name))
         }
     }
 

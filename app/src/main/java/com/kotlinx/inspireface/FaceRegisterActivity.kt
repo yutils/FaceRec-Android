@@ -49,6 +49,8 @@ class FaceRegisterActivity : AppCompatActivity() {
             if (name.isEmpty()) {
                 Toast.makeText(this, "请输入姓名", Toast.LENGTH_SHORT).show(); return@setOnClickListener
             }
+            //保存特征值前先删除重复
+            InspireFaceConfig.deleteByName(name)
             val isSuccess = InspireFaceConfig.saveCharacteristicAndName(bitmap, name)
             Toast.makeText(this, "录入${if (isSuccess) "成功" else "失败"}", Toast.LENGTH_SHORT).show()
             if (isSuccess) {

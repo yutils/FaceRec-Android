@@ -33,7 +33,6 @@ class UserListActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityUserListBinding.inflate(layoutInflater)
         setContentView(binding.root)
-
         adapter = UserListAdapter(
             // 删除
             onDeleteClick = { user ->
@@ -45,7 +44,7 @@ class UserListActivity : AppCompatActivity() {
                         // 删除用户特征值
                         val success = InspireFace.FeatureHubFaceRemove(user.id.toLong())
                         if (success) {
-                            InspireFaceConfig.dbHelper?.deleteName(user.id)
+                            InspireFaceConfig.dbHelper?.deleteById(user.id)
                             Toast.makeText(this, "已删除用户: ${user.name}", Toast.LENGTH_SHORT).show()
                             refreshUserList()
                         } else {
@@ -119,7 +118,7 @@ class UserListActivity : AppCompatActivity() {
                             users.forEach { user ->
                                 val success = InspireFace.FeatureHubFaceRemove(user.id.toLong())
                                 if (success) {
-                                    InspireFaceConfig.dbHelper?.deleteName(user.id)
+                                    InspireFaceConfig.dbHelper?.deleteById(user.id)
                                 } else {
                                     allSuccess = false
                                 }

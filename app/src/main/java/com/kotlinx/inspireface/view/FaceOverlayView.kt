@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.RectF
 import android.util.AttributeSet
 import android.util.Size
 import android.view.View
@@ -16,16 +15,6 @@ import kotlin.math.min
  * 人脸识别结果绘制
  */
 class FaceOverlayView(context: Context, attrs: AttributeSet? = null) : View(context, attrs) {
-    private val pointPaint = Paint().apply {
-        color = Color.RED
-        strokeWidth = 5f
-        style = Paint.Style.FILL
-    }
-    private val rectPaint = Paint().apply {
-        color = Color.GREEN
-        strokeWidth = 5f
-        style = Paint.Style.STROKE
-    }
     private var pointsLists: MutableList<List<Point2f>> = mutableListOf() //人脸信息
     private var livings: FloatArray? = null //活体信息
     private var names: Array<String>? = null //名称
@@ -35,7 +24,34 @@ class FaceOverlayView(context: Context, attrs: AttributeSet? = null) : View(cont
     private var offsetX = 0f // 水平偏移（黑边）
     private var offsetY = 0f // 垂直偏移（黑边）
     private var scaleFactor = 1f // 实际缩放因子
-    private val rect = RectF()
+
+    // 定义画笔 1号人脸
+    val cornerPaint1 = Paint().apply {
+        color = Color.GREEN
+        style = Paint.Style.STROKE
+        isAntiAlias = true
+    }
+
+    // 定义画笔 其他人脸
+    val cornerPaint2 = Paint().apply {
+        color = Color.LTGRAY
+        style = Paint.Style.STROKE
+        isAntiAlias = true
+    }
+
+    // 定义文字画笔
+    val textPaint = Paint().apply {
+        color = Color.WHITE
+        isAntiAlias = true
+        textAlign = Paint.Align.LEFT
+    }
+
+    // 定义画笔 点
+    private val pointPaint = Paint().apply {
+        color = Color.RED
+        strokeWidth = 5f
+        style = Paint.Style.FILL
+    }
 
     init {
         setLayerType(LAYER_TYPE_SOFTWARE, null) // 确保兼容性
@@ -107,21 +123,10 @@ class FaceOverlayView(context: Context, attrs: AttributeSet? = null) : View(cont
 
         // 定义L形线段长度（根据密度调整）
         val cornerLength = 10f * density
+        cornerPaint1.strokeWidth = 2f * density
+        cornerPaint2.strokeWidth = 2f * density
+        textPaint.textSize = 12f * density // 根据像素密度动态调整文字大小
 
-        // 定义画笔
-        val cornerPaint = Paint().apply {
-            color = rectPaint.color
-            style = Paint.Style.STROKE
-            strokeWidth = 2f * density
-            isAntiAlias = true
-        }
-        // 定义文字画笔
-        val textPaint = Paint().apply {
-            color = Color.WHITE
-            textSize = 12f * density // 根据像素密度动态调整文字大小
-            isAntiAlias = true
-            textAlign = Paint.Align.LEFT
-        }
         for (i in 0 until pointsLists.size) {
             // 点数据
             val pointsList = pointsLists[i]
@@ -151,17 +156,17 @@ class FaceOverlayView(context: Context, attrs: AttributeSet? = null) : View(cont
 
             // 绘制四个L形角
             // 左上角
-            canvas.drawLine(left, top, left + cornerLength, top, cornerPaint)
-            canvas.drawLine(left, top, left, top + cornerLength, cornerPaint)
+            canvas.drawLine(left, top, left + cornerLength, top, if (i == 0) cornerPaint1 else cornerPaint2)
+            canvas.drawLine(left, top, left, top + cornerLength, if (i == 0) cornerPaint1 else cornerPaint2)
             // 右上角
-            canvas.drawLine(right - cornerLength, top, right, top, cornerPaint)
-            canvas.drawLine(right, top, right, top + cornerLength, cornerPaint)
+            canvas.drawLine(right - cornerLength, top, right, top, if (i == 0) cornerPaint1 else cornerPaint2)
+            canvas.drawLine(right, top, right, top + cornerLength, if (i == 0) cornerPaint1 else cornerPaint2)
             // 左下角
-            canvas.drawLine(left, bottom, left + cornerLength, bottom, cornerPaint)
-            canvas.drawLine(left, bottom - cornerLength, left, bottom, cornerPaint)
+            canvas.drawLine(left, bottom, left + cornerLength, bottom, if (i == 0) cornerPaint1 else cornerPaint2)
+            canvas.drawLine(left, bottom - cornerLength, left, bottom, if (i == 0) cornerPaint1 else cornerPaint2)
             // 右下角
-            canvas.drawLine(right - cornerLength, bottom, right, bottom, cornerPaint)
-            canvas.drawLine(right, bottom - cornerLength, right, bottom, cornerPaint)
+            canvas.drawLine(right - cornerLength, bottom, right, bottom, if (i == 0) cornerPaint1 else cornerPaint2)
+            canvas.drawLine(right, bottom - cornerLength, right, bottom, if (i == 0) cornerPaint1 else cornerPaint2)
 
             // 绘制活体概率文字
             if (living > 0f) {
@@ -186,18 +191,18 @@ class FaceOverlayView(context: Context, attrs: AttributeSet? = null) : View(cont
             }
 
             // 绘制关键点
-//        pointsList.forEach { point ->
-//            val x = point.x * scaleFactor + offsetX
-//            val y = point.y * scaleFactor + offsetY
-//            if (isFrontCamera) {
-//                canvas.save()
-//                //左右镜像 canvas.scale(-1f, 1f, width / 2f, height / 2f)
-//                canvas.drawPoint(x, y, pointPaint)
-//                canvas.restore()
-//            } else {
-//                canvas.drawPoint(x, y, pointPaint)
+//            pointsList.forEach { point ->
+//                val x = point.x * scaleFactor + offsetX
+//                val y = point.y * scaleFactor + offsetY
+//                if (isFrontCamera) {
+//                    canvas.save()
+//                    //左右镜像 canvas.scale(-1f, 1f, width / 2f, height / 2f)
+//                    canvas.drawPoint(x, y, pointPaint)
+//                    canvas.restore()
+//                } else {
+//                    canvas.drawPoint(x, y, pointPaint)
+//                }
 //            }
-//        }
         }
     }
 }

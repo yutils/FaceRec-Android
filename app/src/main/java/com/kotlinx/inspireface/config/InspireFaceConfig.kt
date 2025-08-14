@@ -6,6 +6,7 @@ import android.util.Log
 import android.widget.Toast
 import com.insightface.sdk.inspireface.InspireFace
 import com.insightface.sdk.inspireface.base.CustomParameter
+import com.insightface.sdk.inspireface.base.FaceFeature
 import com.insightface.sdk.inspireface.base.FaceFeatureIdentity
 import com.insightface.sdk.inspireface.base.Session
 import com.kotlinx.inspireface.db.FaceDatabaseHelper
@@ -13,6 +14,31 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
+
+/*
+使用说明：
+//初始化人脸识别
+InspireFaceConfig.init(App.instance)
+
+//退出
+override fun onDestroy() {
+    super.onDestroy()
+    InspireFaceConfig.onDestroy()
+}
+
+//查询人脸特征值
+val face = InspireFaceConfig.faceFeature(bitmap)
+if (face == null) return
+
+//特征值保存到数据库
+val isSave = InspireFaceConfig.save(face, "511321****1234")
+if (isSave) { /*保存成功*/}
+
+//特征值查询用户
+val userName = InspireFaceConfig.query(face)
+if (userName != null) { /*用户*/}
+ */
+@Suppress("unused")
 object InspireFaceConfig {
     private val TAG = "InspireFace"
     var dbHelper: FaceDatabaseHelper? = null
@@ -71,10 +97,12 @@ object InspireFaceConfig {
             .setPrimaryKeyMode(InspireFace.PK_AUTO_INCREMENT) // 主键模式：自动递增
 
         val hubDataEnable = InspireFace.FeatureHubDataEnable(configuration)
-        Log.d(TAG, "启用特征数据库状态: $hubDataEnable")
+        Log.d(TAG, "启用特征数据库状态: $hubDataEnable 路径：${persistenceDbPath}")
 
         dbHelper?.close()
         dbHelper = FaceDatabaseHelper(context!!, faceNameDbPath)
+
+        Log.d(TAG, "特征值关系库路径：${faceNameDbPath}")
         return hubDataEnable
     }
 
@@ -109,6 +137,118 @@ object InspireFaceConfig {
         return isSuccess
     }
 
+    //判断是否有人脸
+    fun haveFace(bitmap: Bitmap): Boolean {
+        return mutex {
+            val stream = InspireFace.CreateImageStreamFromBitmap(bitmap, InspireFace.CAMERA_ROTATION_0)
+            if (session == null) return@mutex false
+            val faces = InspireFace.ExecuteFaceTrack(session, stream)
+            try {
+                return@mutex faces.detectedNum > 0
+            } finally {
+                InspireFace.ReleaseImageStream(stream)
+            }
+        }
+    }
+
+    //提取全部人脸特征值
+    fun faceFeatureList(bitmap: Bitmap): List<FaceFeature>? {
+        return mutex {
+            val featureList = mutableListOf<FaceFeature>()
+            val stream = InspireFace.CreateImageStreamFromBitmap(bitmap, InspireFace.CAMERA_ROTATION_0)
+            if (session == null) return@mutex featureList
+            val faces = InspireFace.ExecuteFaceTrack(session, stream)
+            try {
+                if (faces.detectedNum == 0) {
+                    return@mutex featureList
+                }
+                if (session == null) return@mutex featureList
+
+                for (i in 0 until faces.detectedNum) {
+                    val feature = InspireFace.ExtractFaceFeature(session, stream, faces.tokens[i])
+                    featureList.add(feature)
+                }
+                return@mutex featureList
+            } finally {
+                InspireFace.ReleaseImageStream(stream)
+            }
+        }
+    }
+
+
+    //提取第一张人脸特征值
+    fun faceFeature(bitmap: Bitmap): FaceFeature? {
+        return mutex {
+            val stream = InspireFace.CreateImageStreamFromBitmap(bitmap, InspireFace.CAMERA_ROTATION_0)
+            if (session == null) return@mutex null
+            val faces = InspireFace.ExecuteFaceTrack(session, stream)
+            try {
+                if (faces.detectedNum == 0) {
+                    return@mutex null
+                }
+                if (session == null) return@mutex null
+                val feature = InspireFace.ExtractFaceFeature(session, stream, faces.tokens[0])
+                return@mutex feature //人脸特征值
+            } finally {
+                InspireFace.ReleaseImageStream(stream)
+            }
+        }
+    }
+
+    //通过特征值查询
+    fun query(faceFeature: FaceFeature): String? {
+        val result = InspireFace.FeatureHubFaceSearch(faceFeature)
+        if (result.id == -1L) return null
+        val name = dbHelper?.queryNameById(result.id.toInt())
+        return name
+    }
+
+    //通过bitmap查询
+    fun query(bitmap: Bitmap): String? {
+        faceFeature(bitmap)?.let {
+            return query(it)
+        }
+        return null
+    }
+
+    //保存特征值
+    fun save(faceFeature: FaceFeature, name: String): Boolean {
+        val identity = FaceFeatureIdentity.create(-1, faceFeature)
+        if (InspireFace.FeatureHubInsertFeature(identity)) {
+            dbHelper?.insertName(identity.id.toInt(), name)
+            return true
+        }
+        return false
+    }
+
+    //保存特征值
+    fun save(bitmap: Bitmap, name: String): Boolean {
+        faceFeature(bitmap)?.let {
+            return save(it, name)
+        }
+        return false
+    }
+
+    //根据特征值id删除
+    fun deleteById(id: Long): Boolean {
+        val success = InspireFace.FeatureHubFaceRemove(id)
+        return if (success) {
+            dbHelper?.deleteById(id.toInt())
+            true
+        } else {
+            false
+        }
+    }
+
+    //根据用户名称删除
+    fun deleteByName(name: String) {
+        dbHelper?.queryNameByName(name)?.let {
+            for (user in it) {
+                deleteById(user.id.toLong())
+            }
+        }
+    }
+
     fun onDestroy() {
         //互斥锁，保证调用ReleaseSession时，其他的互斥线程都执行完毕
         mutex {
@@ -122,10 +262,10 @@ object InspireFaceConfig {
     }
 
     //线程互斥
-    fun mutex(m: () -> Unit) {
-        runBlocking {
+    fun <T> mutex(m: () -> T): T {
+        return runBlocking {
             inspireFaceMutex.withLock {
-                m.invoke()
+                m()
             }
         }
     }

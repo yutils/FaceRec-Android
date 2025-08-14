@@ -47,7 +47,7 @@ class FaceRecognizeActivity : AppCompatActivity() {
                             val feature = InspireFace.ExtractFaceFeature(InspireFaceConfig.session, stream, faces.tokens[i])
                             //从特征中心搜索人脸特征
                             val result = InspireFace.FeatureHubFaceSearch(feature)
-                            val name = InspireFaceConfig.dbHelper?.queryName(result.id.toInt())
+                            val name = InspireFaceConfig.dbHelper?.queryNameById(result.id.toInt())
                             if (name.isNullOrEmpty()) {
                                 Toast.makeText(this, "未找到人脸", Toast.LENGTH_SHORT).show(); return@register
                             }

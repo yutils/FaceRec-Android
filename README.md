@@ -35,6 +35,7 @@
 大家可以自己下载玩一玩，[在release里面有apk文件。](https://github.com/yutils/FaceRec-Android/blob/master/releases)
 觉得不错给我个star吧
 
+### 实际项目中把用户名换成用户id就是
 
 哦，还有一个重要的事情，我之前在退出摄像头页面的时候释放代码就崩溃了，研究了半天
 ```kotlin
@@ -43,6 +44,17 @@ InspireFace.FeatureHubDataDisable()
 InspireFace.GlobalTerminate()
 ```
 因为我在ondestroy()里面调用了以上代码，把InspireFace释放了，但是最后一帧的bitmap还没处理完毕，一旦调用InspireFace里面的其他方法就会崩溃，大家谨记谨记，一定得处理完毕后才能释放资源。
+
+
+或者在处理的逻辑加上互斥锁 `InspireFaceConfig.mutex` ，要求关闭时得处理完当前帧
+```kotlin
+imageAnalysis.setAnalyzer(executor) { imageProxy ->
+    InspireFaceConfig.mutex {   //互斥锁，防止这帧没处理完 InspireFace.ReleaseSession(session) 导致崩溃
+        val bitmap = imageToBitmap(imageProxy)
+        bitmap?.let { processBitmap(it) }
+    }
+}
+```
 
 
 对了，给我个star吧
