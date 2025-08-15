@@ -32,7 +32,7 @@
 | ![预览](doc/03.jpg) | ![预览](doc/04.jpg) |
 
 
-大家可以自己下载玩一玩，[在release里面有apk文件。](https://github.com/yutils/FaceRec-Android/blob/master/releases)
+大家可以自己下载玩一玩，[在release里面有apk文件。](https://github.com/yutils/FaceRec-Android/releases)
 觉得不错给我个star吧
 
 ### 实际项目中把用户名换成用户id就是
