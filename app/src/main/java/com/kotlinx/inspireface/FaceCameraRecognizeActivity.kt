@@ -2,53 +2,41 @@ package com.kotlinx.inspireface
 
 import android.Manifest
 import android.graphics.Bitmap
-import android.graphics.Matrix
 import android.os.Bundle
-import android.util.Size
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.camera.core.CameraInfoUnavailableException
 import androidx.camera.core.CameraSelector
-import androidx.camera.core.ImageAnalysis
-import androidx.camera.core.ImageProxy
-import androidx.camera.core.Preview
-import androidx.camera.core.resolutionselector.ResolutionSelector
-import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.view.PreviewView
-import androidx.core.content.ContextCompat
 import com.insightface.sdk.inspireface.InspireFace
 import com.insightface.sdk.inspireface.base.Point2f
 import com.kotlinx.inspireface.config.InspireFaceConfig
 import com.kotlinx.inspireface.databinding.ActivityCameraRecognizeBinding
+import com.kotlinx.inspireface.utils.CameraHelperX
 import java.util.concurrent.Executors
 
 //人脸识别，相机实时获取
 class FaceCameraRecognizeActivity : AppCompatActivity() {
     private lateinit var binding: ActivityCameraRecognizeBinding
-    private val executor = Executors.newSingleThreadExecutor()
-    private var isFrontCamera = true
-    private var cameraProvider: ProcessCameraProvider? = null
-
+    var cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityCameraRecognizeBinding.inflate(layoutInflater)
         setContentView(binding.root)
         // 设置 PreviewView 水平翻转（镜像）
         // binding.previewView.scaleX = if (lensFacing) -1f else 1f
-
+        val cameraHelperX = CameraHelperX(this)
         // 请求相机权限
         activityResultRegistry.register("CAMERA-YUJI", ActivityResultContracts.RequestPermission()) {
             // 无权限
             if (!it) return@register Toast.makeText(this, "需要相机权限才能使用此功能", Toast.LENGTH_SHORT).show()
             // 权限已授予，启动相机
-            startCamera(binding.previewView)
+            cameraHelperX.startCamera(binding.previewView, cameraSelector)
         }.run { launch(Manifest.permission.CAMERA) }
         // 切换摄像头
         binding.btnSwitchCamera.setOnClickListener {
-            isFrontCamera = !isFrontCamera
-            startCamera(binding.previewView) // 重启相机以应用新设置
+            cameraSelector = if (cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA) CameraSelector.DEFAULT_BACK_CAMERA else CameraSelector.DEFAULT_FRONT_CAMERA
+            cameraHelperX.startCamera(binding.previewView, cameraSelector)
         }
 
         //切换数据库
@@ -64,119 +52,13 @@ class FaceCameraRecognizeActivity : AppCompatActivity() {
             }
             Toast.makeText(this, "切换数据库成功", Toast.LENGTH_SHORT).show()
         }
-    }
 
-    //启动相机
-    private fun startCamera(previewView: PreviewView) {
-        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
-        cameraProviderFuture.addListener({
-            try {
-                // 获取相机提供者
-                cameraProvider = cameraProviderFuture.get()
-
-                // 构建预览用例
-                val preview = Preview.Builder().setResolutionSelector(
-                    ResolutionSelector.Builder().setResolutionStrategy(
-                        ResolutionStrategy(
-                            Size(640, 480), // 尝试目标分辨率
-                            ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER //FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER如果设备不支持指定的目标分辨率，CameraX 会优先选择最接近且高于目标分辨率的分辨率。 FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER如果设备不支持指定的目标分辨率，CameraX 会优先选择最接近且低于目标分辨率的分辨率。
-                        )
-                    ).build()
-                )
-                    .build()
-                    .also { it.setSurfaceProvider(previewView.surfaceProvider) }
-
-                // 构建图像分析用例，使用 ResolutionSelector
-                val imageAnalysis = ImageAnalysis.Builder()
-                    .setResolutionSelector(
-                        ResolutionSelector.Builder().setResolutionStrategy(
-                            ResolutionStrategy(
-                                Size(640, 480), // 尝试目标分辨率
-                                ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER  //FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER如果设备不支持指定的目标分辨率，CameraX 会优先选择最接近且高于目标分辨率的分辨率。 FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER如果设备不支持指定的目标分辨率，CameraX 会优先选择最接近且低于目标分辨率的分辨率。
-                            )
-                        ).build()
-                    )
-                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                    .build()
-
-                imageAnalysis.setAnalyzer(executor) { imageProxy ->
-                    InspireFaceConfig.mutex {   //互斥锁，防止这帧没处理完 InspireFace.ReleaseSession(session) 导致崩溃
-                        val bitmap = imageToBitmap(imageProxy)
-                        bitmap?.let { processBitmap(it) }
-                    }
-                }
-
-                // 解绑之前的所有用例
-                cameraProvider?.unbindAll()
-
-                // 尝试绑定所选摄像头
-                val cameraSelector = if (isFrontCamera) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
-
-                //判断是否有该摄像头
-                fun hasCamera(cameraProvider: ProcessCameraProvider, cameraSelector: CameraSelector): Boolean {
-                    return try {
-                        cameraProvider.hasCamera(cameraSelector)
-                    } catch (e: CameraInfoUnavailableException) {
-                        e.printStackTrace()
-                        false
-                    }
-                }
-                // 检查设备是否有所选摄像头
-                if (hasCamera(cameraProvider!!, cameraSelector)) {
-                    // 有所选摄像头，绑定
-                    val camera = cameraProvider?.bindToLifecycle(this, cameraSelector, preview, imageAnalysis)
-                    val cameraInfo = camera?.cameraInfo
-                } else {
-                    // 没有所选摄像头，尝试切换到另一个
-                    val alternativeSelector = if (isFrontCamera) CameraSelector.DEFAULT_BACK_CAMERA else CameraSelector.DEFAULT_FRONT_CAMERA
-                    if (hasCamera(cameraProvider!!, alternativeSelector)) {
-                        // 有另一个摄像头，绑定并提示用户
-                        isFrontCamera = !isFrontCamera // 更新摄像头方向
-                        cameraProvider?.bindToLifecycle(this, alternativeSelector, preview, imageAnalysis)
-                        runOnUiThread {
-                            Toast.makeText(this, "设备没有${if (!isFrontCamera) "前置" else "后置"}摄像头，已切换到${if (isFrontCamera) "前置" else "后置"}摄像头", Toast.LENGTH_SHORT).show()
-                        }
-                    } else {
-                        // 没有任何摄像头
-                        runOnUiThread {
-                            Toast.makeText(this, "设备没有可用摄像头", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                runOnUiThread {
-                    Toast.makeText(this, "启动相机失败: ${e.message}", Toast.LENGTH_SHORT).show()
-                }
-            }
-        }, ContextCompat.getMainExecutor(this))
-    }
-
-    //将ImageProxy转换为Bitmap
-    private fun imageToBitmap(imageProxy: ImageProxy): Bitmap? {
-        try {
-            // 获取 bitmap
-            var bitmap = imageProxy.toBitmap()
-            // 获取图像旋转角度
-            val rotationDegrees = imageProxy.imageInfo.rotationDegrees
-            // 旋转 bitmap
-            val matrix = Matrix()
-            if (rotationDegrees != 0) {
-                matrix.postRotate(rotationDegrees.toFloat())
-            }
-            // 如果是前置摄像头，可能需要镜像翻转
-            if (isFrontCamera) {
-                matrix.postScale(-1f, 1f, bitmap.width / 2f, bitmap.height / 2f)
-            }
-            bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-            return bitmap
-        } catch (e: Exception) {
-            e.printStackTrace()
-            return null
-        } finally {
-            imageProxy.close()
+        //获取每一帧
+        cameraHelperX.onBitmapReady = { bitmap ->
+            processBitmap(bitmap)
         }
     }
+
 
     //处理Bitmap
     private fun processBitmap(bitmap: Bitmap) {
@@ -249,11 +131,5 @@ class FaceCameraRecognizeActivity : AppCompatActivity() {
             InspireFace.ReleaseImageStream(stream)
         }
         //-------------------------------------------核心逻辑-------------------------------------------
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        executor.shutdown()
-        cameraProvider?.unbindAll()
     }
 }
