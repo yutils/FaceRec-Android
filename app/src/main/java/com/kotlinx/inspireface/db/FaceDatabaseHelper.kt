@@ -1,13 +1,13 @@
 package com.kotlinx.inspireface.db
 
-import android.app.Application
 import android.content.ContentValues
+import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 
 data class User(val id: Int, val name: String)
 
-class FaceDatabaseHelper(context: Application, val dbPath: String = context.let { (it.getExternalFilesDir("")?.absolutePath ?: it.filesDir.path) + "/face_name_1.db" }) : SQLiteOpenHelper(context, dbPath, null, 1) {
+class FaceDatabaseHelper(context: Context, val dbPath: String = context.let { (it.getExternalFilesDir("")?.absolutePath ?: it.filesDir.path) + "/face_name_1.db" }) : SQLiteOpenHelper(context, dbPath, null, 1) {
     override fun onCreate(db: SQLiteDatabase) {
         // 创建 face_info 表，包含 id 和 name 字段
         db.execSQL("CREATE TABLE face_info (id INTEGER PRIMARY KEY, name TEXT)")

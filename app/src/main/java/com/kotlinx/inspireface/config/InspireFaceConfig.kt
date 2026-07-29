@@ -60,7 +60,11 @@ object InspireFaceConfig {
 
     var session: Session? = null
 
-    fun init(context: Application) {
+    fun init(
+        context: Application,
+        persistenceDbPath: String = context.let { (it.getExternalFilesDir("")?.absolutePath ?: it.filesDir.path) + "/face_characteristic_1.db" },
+        faceNameDbPath: String = context.let { (it.getExternalFilesDir("")?.absolutePath ?: it.filesDir.path) + "/face_name_1.db" },
+    ) {
         InspireFaceConfig.context = context
 
         // 获取 SDK 版本
@@ -76,17 +80,25 @@ object InspireFaceConfig {
         }
 
         // 初始化数据库
-        setDB()
+        setDB(persistenceDbPath, faceNameDbPath)
 
         // 设置默认搜索阈值
         InspireFace.FeatureHubFaceSearchThresholdSetting(0.42f)
         session = InspireFace.CreateSession(customParameter, InspireFace.DETECT_MODE_ALWAYS_DETECT, 10, -1, -1)
     }
 
+    private var currentPersistenceDbPath = ""
+    private var currentFaceNameDbPath = ""
     fun setDB(
         persistenceDbPath: String = context!!.let { (it.getExternalFilesDir("")?.absolutePath ?: it.filesDir.path) + "/face_characteristic_1.db" },
         faceNameDbPath: String = context!!.let { (it.getExternalFilesDir("")?.absolutePath ?: it.filesDir.path) + "/face_name_1.db" },
     ): Boolean {
+        if (currentPersistenceDbPath == persistenceDbPath && currentFaceNameDbPath == faceNameDbPath) {
+            return true
+        }
+        currentPersistenceDbPath = persistenceDbPath
+        currentFaceNameDbPath = faceNameDbPath
+
         InspireFace.FeatureHubDataDisable()
         // 创建并配置 FeatureHub（特征中心）
         val configuration = InspireFace.CreateFeatureHubConfiguration()
@@ -138,7 +150,7 @@ object InspireFaceConfig {
     }
 
     //判断是否有人脸
-    fun haveFace(bitmap: Bitmap): Boolean {
+    fun haveFace(bitmap: Bitmap): Boolean? {
         return mutex {
             val stream = InspireFace.CreateImageStreamFromBitmap(bitmap, InspireFace.CAMERA_ROTATION_0)
             if (session == null) return@mutex false
@@ -262,10 +274,15 @@ object InspireFaceConfig {
     }
 
     //线程互斥
-    fun <T> mutex(m: () -> T): T {
+    fun <T> mutex(m: () -> T): T? {
         return runBlocking {
             inspireFaceMutex.withLock {
-                m()
+                return@withLock try {
+                    m()
+                }catch (e: Exception){
+                    e.printStackTrace()
+                    null
+                }
             }
         }
     }
