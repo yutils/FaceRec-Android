@@ -1,5 +1,5 @@
 [versions]
-agp = "8.12.1"
+agp = "9.3.1"
 cameraCore = "1.4.2"
 cameraCamera2 = "1.4.2"
 cameraLifecycle = "1.4.2"
@@ -12,7 +12,7 @@ appcompat = "1.7.1"
 material = "1.12.0"
 activity = "1.8.2"
 constraintlayout = "2.2.1"
-kotlin = "2.2.0"
+kotlin = "2.2.10"
 coreKtx = "1.16.0"
 
 [libraries]
