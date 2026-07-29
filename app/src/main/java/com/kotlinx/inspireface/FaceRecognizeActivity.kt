@@ -57,7 +57,9 @@ class FaceRecognizeActivity : AppCompatActivity() {
                 for (i in 0 until faces.detectedNum) {
                     val startTime2 = System.currentTimeMillis()
                     val currentSession = InspireFaceConfig.session ?: return@mutex
+                    //提取面部特征
                     val feature = InspireFace.ExtractFaceFeature(currentSession, stream, faces.tokens[i])
+                    //从特征中心搜索人脸特征
                     val searchResult = InspireFace.FeatureHubFaceSearch(feature)
                     val name = if (searchResult.id >= 0) {
                         InspireFaceConfig.dbHelper?.queryNameById(searchResult.id.toInt())

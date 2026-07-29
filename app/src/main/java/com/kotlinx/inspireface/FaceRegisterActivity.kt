@@ -70,6 +70,7 @@ class FaceRegisterActivity : AppCompatActivity() {
                 Toast.makeText(this, "请输入姓名", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
+            //保存特征值前先删除重复
             val isSuccess = InspireFaceConfig.mutex {
                 InspireFaceConfig.deleteByName(name)
                 InspireFaceConfig.saveCharacteristicAndName(bitmap, name)
