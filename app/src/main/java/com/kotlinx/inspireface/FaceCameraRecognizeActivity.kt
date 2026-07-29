@@ -7,129 +7,134 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
-import androidx.camera.lifecycle.ProcessCameraProvider
 import com.insightface.sdk.inspireface.InspireFace
 import com.insightface.sdk.inspireface.base.Point2f
 import com.kotlinx.inspireface.config.InspireFaceConfig
 import com.kotlinx.inspireface.databinding.ActivityCameraRecognizeBinding
 import com.kotlinx.inspireface.utils.CameraHelperX
-import java.util.concurrent.Executors
 
-//人脸识别，相机实时获取
+// 人脸识别，相机实时获取
 class FaceCameraRecognizeActivity : AppCompatActivity() {
     private lateinit var binding: ActivityCameraRecognizeBinding
-    var cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
+    private lateinit var cameraHelperX: CameraHelperX
+    private var cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityCameraRecognizeBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        // 设置 PreviewView 水平翻转（镜像）
-        // binding.previewView.scaleX = if (lensFacing) -1f else 1f
-        val cameraHelperX = CameraHelperX(this)
-        // 请求相机权限
+        InspireFaceConfig.ensureInitialized(MyApp.instance)
+
+        cameraHelperX = CameraHelperX(this)
         activityResultRegistry.register("CAMERA-YUJI", ActivityResultContracts.RequestPermission()) {
-            // 无权限
-            if (!it) return@register Toast.makeText(this, "需要相机权限才能使用此功能", Toast.LENGTH_SHORT).show()
-            // 权限已授予，启动相机
+            if (!it) {
+                Toast.makeText(this, "需要相机权限才能使用此功能", Toast.LENGTH_SHORT).show()
+                return@register
+            }
             cameraHelperX.startCamera(binding.previewView, cameraSelector)
         }.run { launch(Manifest.permission.CAMERA) }
-        // 切换摄像头
+
         binding.btnSwitchCamera.setOnClickListener {
-            cameraSelector = if (cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA) CameraSelector.DEFAULT_BACK_CAMERA else CameraSelector.DEFAULT_FRONT_CAMERA
+            cameraSelector = if (cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA) {
+                CameraSelector.DEFAULT_BACK_CAMERA
+            } else {
+                CameraSelector.DEFAULT_FRONT_CAMERA
+            }
             cameraHelperX.startCamera(binding.previewView, cameraSelector)
         }
 
-        //切换数据库
         binding.btnChangeDB.setOnClickListener {
+            val basePath = application.let {
+                it.getExternalFilesDir("")?.absolutePath ?: it.filesDir.path
+            }
             if (InspireFaceConfig.dbHelper?.dbPath?.endsWith("face_name_1.db") == false) {
-                val persistenceDbPath: String = application.let { (it.getExternalFilesDir("")?.absolutePath ?: it.filesDir.path) + "/face_characteristic_1.db" }
-                val faceNameDbPath: String = application.let { (it.getExternalFilesDir("")?.absolutePath ?: it.filesDir.path) + "/face_name_1.db" }
-                InspireFaceConfig.setDB(persistenceDbPath, faceNameDbPath)
+                InspireFaceConfig.switchDB(
+                    "$basePath/face_characteristic_1.db",
+                    "$basePath/face_name_1.db",
+                )
             } else {
-                val persistenceDbPath: String = application.let { (it.getExternalFilesDir("")?.absolutePath ?: it.filesDir.path) + "/face_characteristic_2.db" }
-                val faceNameDbPath: String = application.let { (it.getExternalFilesDir("")?.absolutePath ?: it.filesDir.path) + "/face_name_2.db" }
-                InspireFaceConfig.setDB(persistenceDbPath, faceNameDbPath)
+                InspireFaceConfig.switchDB(
+                    "$basePath/face_characteristic_2.db",
+                    "$basePath/face_name_2.db",
+                )
             }
             Toast.makeText(this, "切换数据库成功", Toast.LENGTH_SHORT).show()
         }
 
-        //获取每一帧
-        cameraHelperX.onBitmapReady = { bitmap ->
-            processBitmap(bitmap)
+        cameraHelperX.onBitmapReady = lambda@{ bitmap ->
+            if (isDestroyed || isFinishing) return@lambda
+            // 互斥锁：防止帧处理过程中 session 被释放导致 native 崩溃
+            InspireFaceConfig.mutex {
+                if (!isDestroyed && !isFinishing) {
+                    processBitmap(bitmap)
+                }
+            }
         }
     }
 
+    private fun runOnUiThreadSafe(action: () -> Unit) {
+        if (isDestroyed || isFinishing) return
+        runOnUiThread {
+            if (!isDestroyed && !isFinishing) action()
+        }
+    }
 
-    //处理Bitmap
     private fun processBitmap(bitmap: Bitmap) {
         val startTime1 = System.currentTimeMillis()
-        //-------------------------------------------核心逻辑-------------------------------------------
         val stream = InspireFace.CreateImageStreamFromBitmap(bitmap, InspireFace.CAMERA_ROTATION_0)
-        if (InspireFaceConfig.session == null) return
-        val faces = InspireFace.ExecuteFaceTrack(InspireFaceConfig.session, stream)
-        val endTime1 = System.currentTimeMillis() - startTime1
         try {
+            val session = InspireFaceConfig.session ?: return
+            val faces = InspireFace.ExecuteFaceTrack(session, stream)
+            val endTime1 = System.currentTimeMillis() - startTime1
+
             if (faces.detectedNum == 0) {
-                runOnUiThread {
+                runOnUiThreadSafe {
                     binding.tvResult.text = "未检测到人脸 检测耗时${endTime1}ms"
                     binding.faceOverlayView.clear()
                 }
-            } else {
-                var tvResult = "识别到${faces.detectedNum}张人脸 检测耗时${endTime1}ms"
-                runOnUiThread {
-                    binding.faceOverlayView.setPreviewSize(bitmap.width, bitmap.height)
-                }
+                return
+            }
 
-                val names = Array(faces.detectedNum) { "未知" }
-                for (i in 0 until faces.detectedNum) {
-                    val startTime2 = System.currentTimeMillis()
-                    //提取面部特征
-                    if (InspireFaceConfig.session == null) return
-                    val feature = InspireFace.ExtractFaceFeature(InspireFaceConfig.session, stream, faces.tokens[i])
-                    //从特征中心搜索人脸特征
-                    val result = InspireFace.FeatureHubFaceSearch(feature)
-                    val name = InspireFaceConfig.dbHelper?.queryNameById(result.id.toInt())
-                    names[i] = "$name ${String.format("%.2f", result.searchConfidence * 100.0)}%"
-                    if (name.isNullOrEmpty()) {
-                        runOnUiThread {
-                            Toast.makeText(this, "未匹配到用户", Toast.LENGTH_SHORT).show()
-                        }
-                        continue
-                    }
+            var tvResult = "识别到${faces.detectedNum}张人脸 检测耗时${endTime1}ms"
+            val names = Array(faces.detectedNum) { "未知" }
+            for (i in 0 until faces.detectedNum) {
+                val startTime2 = System.currentTimeMillis()
+                val currentSession = InspireFaceConfig.session ?: return
+                val feature = InspireFace.ExtractFaceFeature(currentSession, stream, faces.tokens[i])
+                val result = InspireFace.FeatureHubFaceSearch(feature)
+                val name = if (result.id >= 0) {
+                    InspireFaceConfig.dbHelper?.queryNameById(result.id.toInt())
+                } else {
+                    null
+                }
+                names[i] = "${name ?: "未知"} ${String.format("%.2f", result.searchConfidence * 100.0)}%"
+                if (!name.isNullOrEmpty()) {
                     val endTime2 = System.currentTimeMillis() - startTime2
-                    tvResult = tvResult + "\n人脸${i + 1}:$name ${String.format("%.2f", result.searchConfidence * 100.0)}% 识别:${endTime2}ms "
-                }
-                runOnUiThread {
-                    binding.tvResult.text = tvResult
-                }
-
-                val living = FloatArray(faces.detectedNum) { 0.0f }
-//                //活体分析（管线分析）
-//                val cp = InspireFace.CreateCustomParameter().enableLiveness(true)
-//                //判断多人脸管线分析是否成功，然后获取每张脸活体概率
-//                if (InspireFaceConfig.session == null) return
-//                if (InspireFace.MultipleFacePipelineProcess(InspireFaceConfig.session, stream, faces, cp)) {
-//                    val confidence = InspireFace.GetRGBLivenessConfidence(InspireFaceConfig.session).confidence
-//                    for (i in 0 until faces.detectedNum) {
-//                        living[i] = confidence[i]
-//                    }
-//                }
-
-                //绘制人脸关键点
-                val faceList = mutableListOf<List<Point2f>>()
-                for (i in 0 until faces.detectedNum) {
-                    // 获取人脸关键点
-                    val facePoints = InspireFace.GetFaceDenseLandmarkFromFaceToken(faces.tokens[i])
-                    faceList.add(facePoints.toList())
-                }
-                // 在UI线程更新视图
-                runOnUiThread {
-                    binding.faceOverlayView.setFacePoints(faceList, living, names)
+                    tvResult += "\n人脸${i + 1}:$name ${String.format("%.2f", result.searchConfidence * 100.0)}% 识别:${endTime2}ms "
                 }
             }
+
+            val living = FloatArray(faces.detectedNum) { 0.0f }
+            val faceList = mutableListOf<List<Point2f>>()
+            for (i in 0 until faces.detectedNum) {
+                val facePoints = InspireFace.GetFaceDenseLandmarkFromFaceToken(faces.tokens[i])
+                faceList.add(facePoints.toList())
+            }
+
+            runOnUiThreadSafe {
+                binding.faceOverlayView.setPreviewSize(bitmap.width, bitmap.height)
+                binding.tvResult.text = tvResult
+                binding.faceOverlayView.setFacePoints(faceList, living, names)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         } finally {
             InspireFace.ReleaseImageStream(stream)
         }
-        //-------------------------------------------核心逻辑-------------------------------------------
+    }
+
+    override fun onDestroy() {
+        cameraHelperX.onBitmapReady = null
+        super.onDestroy()
     }
 }

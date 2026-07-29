@@ -41,7 +41,9 @@ if (userName != null) { /*用户*/}
 @Suppress("unused")
 object InspireFaceConfig {
     private val TAG = "InspireFace"
+    @Volatile
     var dbHelper: FaceDatabaseHelper? = null
+    @Volatile
     private var context: Application? = null
 
     // 创建一个互斥锁，防止正在处理照片时候，InspireFace.ReleaseSession(session)导致崩溃
@@ -58,33 +60,44 @@ object InspireFaceConfig {
             .enableMaskDetect(true) // 启用口罩检测
     }
 
+    @Volatile
     var session: Session? = null
+
+    @Volatile
+    private var initialized = false
+
+    fun ensureInitialized(context: Application) {
+        if (initialized && session != null && InspireFace.QueryLaunchStatus()) return
+        init(context)
+    }
 
     fun init(
         context: Application,
         persistenceDbPath: String = context.let { (it.getExternalFilesDir("")?.absolutePath ?: it.filesDir.path) + "/face_characteristic_1.db" },
         faceNameDbPath: String = context.let { (it.getExternalFilesDir("")?.absolutePath ?: it.filesDir.path) + "/face_name_1.db" },
     ) {
+        if (initialized && session != null && InspireFace.QueryLaunchStatus()) {
+            Log.d(TAG, "SDK 已初始化，跳过重复初始化")
+            return
+        }
         InspireFaceConfig.context = context
 
-        // 获取 SDK 版本
         val version = InspireFace.QueryInspireFaceVersion()
         Log.i(TAG, "当前 InspireFaceSDK 版本: " + version.major + "." + version.minor + "." + version.patch)
 
-        // 初始化 SDK
         val launchStatus = InspireFace.GlobalLaunch(context, InspireFace.PIKACHU)
         Log.d(TAG, "InspireFaceSDK 启动状态: $launchStatus")
         if (!launchStatus) {
             Log.e(TAG, "SDK 启动失败！")
+            initialized = false
             return
         }
 
-        // 初始化数据库
         setDB(persistenceDbPath, faceNameDbPath)
-
-        // 设置默认搜索阈值
         InspireFace.FeatureHubFaceSearchThresholdSetting(0.42f)
         session = InspireFace.CreateSession(customParameter, InspireFace.DETECT_MODE_ALWAYS_DETECT, 10, -1, -1)
+        initialized = session != null
+        Log.d(TAG, "Session 创建完成: ${session != null}")
     }
 
     private var currentPersistenceDbPath = ""
@@ -100,13 +113,12 @@ object InspireFaceConfig {
         currentFaceNameDbPath = faceNameDbPath
 
         InspireFace.FeatureHubDataDisable()
-        // 创建并配置 FeatureHub（特征中心）
         val configuration = InspireFace.CreateFeatureHubConfiguration()
-            .setEnablePersistence(true) // 是否启用持久化
-            .setPersistenceDbPath(persistenceDbPath) // 数据库路径
-            .setSearchThreshold(0.42f) // 人脸匹配阈值
-            .setSearchMode(InspireFace.SEARCH_MODE_EXHAUSTIVE) // 搜索模式：全量搜索
-            .setPrimaryKeyMode(InspireFace.PK_AUTO_INCREMENT) // 主键模式：自动递增
+            .setEnablePersistence(true)
+            .setPersistenceDbPath(persistenceDbPath)
+            .setSearchThreshold(0.42f)
+            .setSearchMode(InspireFace.SEARCH_MODE_EXHAUSTIVE)
+            .setPrimaryKeyMode(InspireFace.PK_AUTO_INCREMENT)
 
         val hubDataEnable = InspireFace.FeatureHubDataEnable(configuration)
         Log.d(TAG, "启用特征数据库状态: $hubDataEnable 路径：${persistenceDbPath}")
@@ -118,14 +130,18 @@ object InspireFaceConfig {
         return hubDataEnable
     }
 
+    /** 切换数据库，带互斥锁，可在相机运行时安全调用 */
+    fun switchDB(persistenceDbPath: String, faceNameDbPath: String): Boolean {
+        return mutex { setDB(persistenceDbPath, faceNameDbPath) } ?: false
+    }
+
     //保存特征值
     fun saveCharacteristicAndName(bitmap: Bitmap, name: String): Boolean {
         val startTime = System.currentTimeMillis()
         val stream = InspireFace.CreateImageStreamFromBitmap(bitmap, InspireFace.CAMERA_ROTATION_0)
-        if (session == null) return false
-        val faces = InspireFace.ExecuteFaceTrack(session, stream)
-        val isSuccess: Boolean
         try {
+            if (session == null) return false
+            val faces = InspireFace.ExecuteFaceTrack(session, stream)
             if (faces.detectedNum == 0) {
                 Toast.makeText(context, "未检测到人脸", Toast.LENGTH_SHORT).show()
                 return false
@@ -136,7 +152,7 @@ object InspireFaceConfig {
             }
             val feature = InspireFace.ExtractFaceFeature(session, stream, faces.tokens[0])
             val identity = FaceFeatureIdentity.create(-1, feature)
-            isSuccess = if (InspireFace.FeatureHubInsertFeature(identity)) {
+            return if (InspireFace.FeatureHubInsertFeature(identity)) {
                 dbHelper?.insertName(identity.id.toInt(), name)
                 true
             } else {
@@ -144,9 +160,8 @@ object InspireFaceConfig {
             }
         } finally {
             InspireFace.ReleaseImageStream(stream)
+            Log.i(TAG, "耗时：${System.currentTimeMillis() - startTime} ms")
         }
-        Log.i(TAG, "耗时：${System.currentTimeMillis() - startTime} ms")
-        return isSuccess
     }
 
     //判断是否有人脸
@@ -262,15 +277,19 @@ object InspireFaceConfig {
     }
 
     fun onDestroy() {
-        //互斥锁，保证调用ReleaseSession时，其他的互斥线程都执行完毕
         mutex {
-            InspireFace.ReleaseSession(session)
-            session = null
-            dbHelper?.close()
-            dbHelper = null
-            InspireFace.FeatureHubDataDisable()
-            InspireFace.GlobalTerminate()
+            releaseInternal()
         }
+    }
+
+    private fun releaseInternal() {
+        InspireFace.ReleaseSession(session)
+        session = null
+        initialized = false
+        dbHelper?.close()
+        dbHelper = null
+        InspireFace.FeatureHubDataDisable()
+        InspireFace.GlobalTerminate()
     }
 
     //线程互斥

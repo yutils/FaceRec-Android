@@ -21,8 +21,8 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        //初始化人脸识别
-        InspireFaceConfig.init(MyApp.instance)
+        // 确保 SDK 已初始化（Application 中已初始化，此处做兜底）
+        InspireFaceConfig.ensureInitialized(MyApp.instance)
 
         binding.btnRegister.setOnClickListener {
             startActivity(Intent(this, FaceRegisterActivity::class.java))
@@ -43,10 +43,5 @@ class MainActivity : AppCompatActivity() {
         binding.btnUserList.setOnClickListener {
             startActivity(Intent(this, UserListActivity::class.java))
         }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        InspireFaceConfig.onDestroy()
     }
 }

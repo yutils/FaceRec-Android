@@ -18,96 +18,63 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.also
 
 /**
  * CameraX 简易封装
  * @author yujing 2025年8月20日17点55分
- * 权限要求：
- * <uses-permission android:name="android.permission.CAMERA" />
- * <uses-feature android:name="android.hardware.camera" android:required="false" />
- * <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
- */
-/*
-引入：
-implementation 'androidx.camera:camera-extensions:1.3.1'
-implementation 'androidx.camera:camera-camera2:1.3.1'
-implementation 'androidx.camera:camera-lifecycle:1.3.1'
-implementation 'androidx.camera:camera-core:1.3.1'
-implementation 'androidx.camera:camera-view:1.3.1'
-
-用法示例：
-var cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
-val cameraHelperX = CameraHelperX(this)
-// 请求相机权限
-activityResultRegistry.register("CAMERA-YUJI", ActivityResultContracts.RequestPermission()) {
-    if (!it) return@register Toast.makeText(this, "需要相机权限才能使用此功能", Toast.LENGTH_SHORT).show()
-    // 权限已授予，启动相机
-    cameraHelperX.startCamera(binding.previewView, cameraSelector)
-}.run { launch(Manifest.permission.CAMERA) }
-
-// 切换摄像头
-binding.btnSwitchCamera.setOnClickListener {
-    cameraSelector = if (cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA) CameraSelector.DEFAULT_BACK_CAMERA else CameraSelector.DEFAULT_FRONT_CAMERA
-    cameraHelperX.startCamera(binding.previewView, cameraSelector)
-}
-//实时获取每一帧
-cameraHelperX.onBitmapReady = { bitmap->
-
-}
-
-// 获取一张bitmap
-val bitmap = cameraHelperX.getBitmap()
  */
 class CameraHelperX(val activity: AppCompatActivity) : DefaultLifecycleObserver {
     private val executor = Executors.newSingleThreadExecutor()
     private var cameraProvider: ProcessCameraProvider? = null
+    private val isProcessing = AtomicBoolean(false)
+    @Volatile
+    private var isReleased = false
 
-    // 保存最新的 Bitmap，供外部获取
     private var latestBitmap: Bitmap? = null
-
-    // 当前摄像头方向
     var cameraSelector: CameraSelector? = null
-
-    // 获取最新的 Bitmap
-    fun getBitmap(): Bitmap? = latestBitmap
-
-    //回调函数，当捕获的图像转换为 Bitmap 时调用
     var onBitmapReady: ((Bitmap) -> Unit)? = null
 
     init {
         activity.lifecycle.addObserver(this)
     }
 
-    //这个方法不用看
-    fun startCamera(previewView: PreviewView, cameraSelector: CameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA, width: Int = 640, height: Int = 480) {
+    fun getBitmap(): Bitmap? = latestBitmap
+
+    fun startCamera(
+        previewView: PreviewView,
+        cameraSelector: CameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA,
+        width: Int = 640,
+        height: Int = 480,
+    ) {
+        if (isReleased) return
         this.cameraSelector = cameraSelector
         val cameraProviderFuture = ProcessCameraProvider.getInstance(activity)
         cameraProviderFuture.addListener({
+            if (isReleased) return@addListener
             try {
-                // 获取相机提供者
                 cameraProvider = cameraProviderFuture.get()
 
-                // 构建预览用例
                 val preview = Preview.Builder().setResolutionSelector(
                     ResolutionSelector.Builder().setResolutionStrategy(
                         ResolutionStrategy(
-                            Size(width, height), // 尝试目标分辨率
-                            ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER //FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER如果设备不支持指定的目标分辨率，CameraX 会优先选择最接近且高于目标分辨率的分辨率。 FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER如果设备不支持指定的目标分辨率，CameraX 会优先选择最接近且低于目标分辨率的分辨率。
-                        )
-                    ).build()
+                            Size(width, height),
+                            ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER,
+                        ),
+                    ).build(),
                 )
                     .build()
                     .also { it.surfaceProvider = previewView.surfaceProvider }
 
-                // 构建图像分析用例，使用 ResolutionSelector
                 val imageAnalysis = ImageAnalysis.Builder().setResolutionSelector(
                     ResolutionSelector.Builder().setResolutionStrategy(
                         ResolutionStrategy(
-                            Size(width, height), // 尝试目标分辨率
-                            ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER  //FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER如果设备不支持指定的目标分辨率，CameraX 会优先选择最接近且高于目标分辨率的分辨率。 FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER如果设备不支持指定的目标分辨率，CameraX 会优先选择最接近且低于目标分辨率的分辨率。
-                        )
-                    ).build()
+                            Size(width, height),
+                            ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER,
+                        ),
+                    ).build(),
                 )
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .build()
@@ -116,25 +83,22 @@ class CameraHelperX(val activity: AppCompatActivity) : DefaultLifecycleObserver 
                     processImage(imageProxy)
                 }
 
-                // 解绑之前的所有用例
                 cameraProvider?.unbindAll()
 
-                // 检查设备是否有所选摄像头
                 if (hasCamera(cameraProvider!!, cameraSelector)) {
-                    // 有所选摄像头，绑定
-                    val camera = cameraProvider?.bindToLifecycle(activity, cameraSelector, preview, imageAnalysis)
-                    //val cameraInfo = camera?.cameraInfo
+                    cameraProvider?.bindToLifecycle(activity, cameraSelector, preview, imageAnalysis)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                activity.runOnUiThread {
-                    Toast.makeText(activity, "启动相机失败: ${e.message}", Toast.LENGTH_SHORT).show()
+                if (!isReleased) {
+                    activity.runOnUiThread {
+                        Toast.makeText(activity, "启动相机失败: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
         }, ContextCompat.getMainExecutor(activity))
     }
 
-    //判断是否有该摄像头
     private fun hasCamera(cameraProvider: ProcessCameraProvider, cameraSelector: CameraSelector): Boolean {
         return try {
             cameraProvider.hasCamera(cameraSelector)
@@ -144,35 +108,63 @@ class CameraHelperX(val activity: AppCompatActivity) : DefaultLifecycleObserver 
         }
     }
 
-    //将ImageProxy转换为Bitmap
     private fun processImage(imageProxy: ImageProxy) {
+        if (isReleased || onBitmapReady == null) {
+            imageProxy.close()
+            return
+        }
+        // 上一帧仍在识别中则跳过，避免帧堆积导致内存和 native 资源泄漏
+        if (!isProcessing.compareAndSet(false, true)) {
+            imageProxy.close()
+            return
+        }
         try {
-            // 获取 bitmap
-            var bitmap = imageProxy.toBitmap()
-            // 获取图像旋转角度
+            val rawBitmap = imageProxy.toBitmap()
             val rotationDegrees = imageProxy.imageInfo.rotationDegrees
-            // 旋转 bitmap
             val matrix = Matrix()
             if (rotationDegrees != 0) {
                 matrix.postRotate(rotationDegrees.toFloat())
             }
-            // 如果是前置摄像头，可能需要镜像翻转
             if (cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA) {
-                matrix.postScale(-1f, 1f, bitmap.width / 2f, bitmap.height / 2f)
+                matrix.postScale(-1f, 1f, rawBitmap.width / 2f, rawBitmap.height / 2f)
             }
-            bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+            val bitmap = if (matrix.isIdentity) {
+                rawBitmap
+            } else {
+                Bitmap.createBitmap(rawBitmap, 0, 0, rawBitmap.width, rawBitmap.height, matrix, true).also {
+                    if (it !== rawBitmap) rawBitmap.recycle()
+                }
+            }
+            recycleLatestBitmap()
             latestBitmap = bitmap
             onBitmapReady?.invoke(bitmap)
         } catch (e: Exception) {
             e.printStackTrace()
         } finally {
+            isProcessing.set(false)
             imageProxy.close()
         }
     }
 
+    private fun recycleLatestBitmap() {
+        latestBitmap?.let {
+            if (!it.isRecycled) it.recycle()
+        }
+        latestBitmap = null
+    }
+
     override fun onDestroy(owner: LifecycleOwner) {
-        super.onDestroy(owner)
-        executor.shutdown()
+        isReleased = true
+        onBitmapReady = null
         cameraProvider?.unbindAll()
+        executor.shutdown()
+        try {
+            // 等待当前帧处理完毕，避免 native 层在识别中途被强制打断
+            executor.awaitTermination(3, TimeUnit.SECONDS)
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+        }
+        recycleLatestBitmap()
+        activity.lifecycle.removeObserver(this)
     }
 }
