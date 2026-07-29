@@ -80,6 +80,10 @@ object InspireFaceConfig {
             Log.d(TAG, "SDK 已初始化，跳过重复初始化")
             return
         }
+        // 清理残留状态，避免 GlobalLaunch 重复调用导致 native 异常
+        if (InspireFace.QueryLaunchStatus()) {
+            releaseInternal()
+        }
         InspireFaceConfig.context = context
 
         val version = InspireFace.QueryInspireFaceVersion()
@@ -90,6 +94,7 @@ object InspireFaceConfig {
         if (!launchStatus) {
             Log.e(TAG, "SDK 启动失败！")
             initialized = false
+            session = null
             return
         }
 
@@ -143,11 +148,11 @@ object InspireFaceConfig {
             if (session == null) return false
             val faces = InspireFace.ExecuteFaceTrack(session, stream)
             if (faces.detectedNum == 0) {
-                Toast.makeText(context, "未检测到人脸", Toast.LENGTH_SHORT).show()
+                Log.w(TAG, "未检测到人脸")
                 return false
             }
             if (faces.detectedNum > 1) {
-                Toast.makeText(context, "检测到多张人脸", Toast.LENGTH_SHORT).show()
+                Log.w(TAG, "检测到多张人脸")
                 return false
             }
             val feature = InspireFace.ExtractFaceFeature(session, stream, faces.tokens[0])
@@ -269,11 +274,13 @@ object InspireFaceConfig {
 
     //根据用户名称删除
     fun deleteByName(name: String) {
-        dbHelper?.queryNameByName(name)?.let {
-            for (user in it) {
-                deleteById(user.id.toLong())
-            }
+        dbHelper?.queryNameByName(name)?.forEach { user ->
+            deleteById(user.id.toLong())
         }
+    }
+
+    fun deleteByNameSafe(name: String) {
+        mutex { deleteByName(name) }
     }
 
     fun onDestroy() {
@@ -283,13 +290,17 @@ object InspireFaceConfig {
     }
 
     private fun releaseInternal() {
-        InspireFace.ReleaseSession(session)
-        session = null
+        if (session != null) {
+            InspireFace.ReleaseSession(session)
+            session = null
+        }
         initialized = false
         dbHelper?.close()
         dbHelper = null
-        InspireFace.FeatureHubDataDisable()
-        InspireFace.GlobalTerminate()
+        if (InspireFace.QueryLaunchStatus()) {
+            InspireFace.FeatureHubDataDisable()
+            InspireFace.GlobalTerminate()
+        }
     }
 
     //线程互斥

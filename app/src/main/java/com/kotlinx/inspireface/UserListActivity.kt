@@ -33,6 +33,7 @@ class UserListActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityUserListBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        InspireFaceConfig.ensureInitialized(MyApp.instance)
         adapter = UserListAdapter(
             // 删除
             onDeleteClick = { user ->
@@ -41,8 +42,9 @@ class UserListActivity : AppCompatActivity() {
                     .setTitle("确认删除")
                     .setMessage("确定要删除用户 ${user.name} (ID: ${user.id}) 吗？")
                     .setPositiveButton("确定") { _, _ ->
-                        // 删除用户特征值
-                        val success = InspireFace.FeatureHubFaceRemove(user.id.toLong())
+                        val success = InspireFaceConfig.mutex {
+                            InspireFace.FeatureHubFaceRemove(user.id.toLong())
+                        } ?: false
                         if (success) {
                             InspireFaceConfig.dbHelper?.deleteById(user.id)
                             Toast.makeText(this, "已删除用户: ${user.name}", Toast.LENGTH_SHORT).show()
@@ -103,7 +105,9 @@ class UserListActivity : AppCompatActivity() {
 
                     // 在协程中执行删除
                     CoroutineScope(Dispatchers.Main).launch {
-                        val users = withContext(Dispatchers.IO) { InspireFaceConfig.dbHelper?.getAllUsers() }!!
+                        val users = withContext(Dispatchers.IO) {
+                            InspireFaceConfig.dbHelper?.getAllUsers() ?: emptyList()
+                        }
                         if (users.isEmpty()) {
                             progressDialog.dismiss()
                             Toast.makeText(this@UserListActivity, "没有用户可删除", Toast.LENGTH_SHORT).show()
@@ -116,7 +120,9 @@ class UserListActivity : AppCompatActivity() {
 
                         withContext(Dispatchers.IO) {
                             users.forEach { user ->
-                                val success = InspireFace.FeatureHubFaceRemove(user.id.toLong())
+                                val success = InspireFaceConfig.mutex {
+                                    InspireFace.FeatureHubFaceRemove(user.id.toLong())
+                                } ?: false
                                 if (success) {
                                     InspireFaceConfig.dbHelper?.deleteById(user.id)
                                 } else {
@@ -146,14 +152,19 @@ class UserListActivity : AppCompatActivity() {
 
         //切换数据库
         binding.btnChangeDB.setOnClickListener {
+            val basePath = application.let {
+                it.getExternalFilesDir("")?.absolutePath ?: it.filesDir.path
+            }
             if (InspireFaceConfig.dbHelper?.dbPath?.endsWith("face_name_1.db") == false) {
-                val persistenceDbPath: String = application.let { (it.getExternalFilesDir("")?.absolutePath ?: it.filesDir.path) + "/face_characteristic_1.db" }
-                val faceNameDbPath: String = application.let { (it.getExternalFilesDir("")?.absolutePath ?: it.filesDir.path) + "/face_name_1.db" }
-                InspireFaceConfig.setDB(persistenceDbPath, faceNameDbPath)
+                InspireFaceConfig.switchDB(
+                    "$basePath/face_characteristic_1.db",
+                    "$basePath/face_name_1.db",
+                )
             } else {
-                val persistenceDbPath: String = application.let { (it.getExternalFilesDir("")?.absolutePath ?: it.filesDir.path) + "/face_characteristic_2.db" }
-                val faceNameDbPath: String = application.let { (it.getExternalFilesDir("")?.absolutePath ?: it.filesDir.path) + "/face_name_2.db" }
-                InspireFaceConfig.setDB(persistenceDbPath, faceNameDbPath)
+                InspireFaceConfig.switchDB(
+                    "$basePath/face_characteristic_2.db",
+                    "$basePath/face_name_2.db",
+                )
             }
             Toast.makeText(this, "切换数据库成功", Toast.LENGTH_SHORT).show()
             refreshUserList()
@@ -162,7 +173,7 @@ class UserListActivity : AppCompatActivity() {
     }
 
     private fun refreshUserList() {
-        val users = InspireFaceConfig.dbHelper?.getAllUsers()!!
+        val users = InspireFaceConfig.dbHelper?.getAllUsers() ?: emptyList()
         adapter.submitList(users)
         binding.tvUserCount.text = "总用户数: ${users.size}"
     }

@@ -21,8 +21,11 @@ class FaceCameraRegisterActivity : AppCompatActivity() {
     private lateinit var cameraHelperX: CameraHelperX
     private var cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
     private var captureNextFaceFrame = false
-    // 必须在 UI 线程读取姓名，不能在相机后台线程读 EditText
     private var pendingRegisterName: String? = null
+    private var noFaceFrameCount = 0
+    private companion object {
+        const val MAX_NO_FACE_FRAMES = 90 // 约 3 秒无检测到人脸则超时
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -58,6 +61,7 @@ class FaceCameraRegisterActivity : AppCompatActivity() {
             binding.etName.isEnabled = false
             pendingRegisterName = name
             captureNextFaceFrame = true
+            noFaceFrameCount = 0
         }
 
         binding.btnChangeDB.setOnClickListener {
@@ -114,8 +118,12 @@ class FaceCameraRegisterActivity : AppCompatActivity() {
 
             if (faces.detectedNum == 0) {
                 runOnUiThreadSafe { binding.faceOverlayView.clear() }
+                if (captureNextFaceFrame && ++noFaceFrameCount >= MAX_NO_FACE_FRAMES) {
+                    resetRegisterState("未检测到人脸，请正对摄像头重试")
+                }
                 return
             }
+            noFaceFrameCount = 0
 
             val faceList = mutableListOf<List<Point2f>>()
             for (i in 0 until faces.detectedNum) {

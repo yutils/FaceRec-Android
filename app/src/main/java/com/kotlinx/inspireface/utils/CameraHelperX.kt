@@ -18,7 +18,6 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.also
 
@@ -158,12 +157,7 @@ class CameraHelperX(val activity: AppCompatActivity) : DefaultLifecycleObserver 
         onBitmapReady = null
         cameraProvider?.unbindAll()
         executor.shutdown()
-        try {
-            // 等待当前帧处理完毕，避免 native 层在识别中途被强制打断
-            executor.awaitTermination(3, TimeUnit.SECONDS)
-        } catch (e: InterruptedException) {
-            Thread.currentThread().interrupt()
-        }
+        // 不在主线程阻塞等待，shutdown() 会等当前帧任务自然结束
         recycleLatestBitmap()
         activity.lifecycle.removeObserver(this)
     }
