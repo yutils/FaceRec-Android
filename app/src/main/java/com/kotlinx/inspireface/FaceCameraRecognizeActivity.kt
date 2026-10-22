@@ -81,10 +81,10 @@ class FaceCameraRecognizeActivity : AppCompatActivity() {
 
     private fun processBitmap(bitmap: Bitmap) {
         val startTime1 = System.currentTimeMillis()
-        val stream = InspireFace.CreateImageStreamFromBitmap(bitmap, InspireFace.CAMERA_ROTATION_0)
+        val stream = InspireFace.CreateImageStreamFromBitmap(bitmap, InspireFace.CAMERA_ROTATION_0) ?: return
         try {
             val session = InspireFaceConfig.session ?: return
-            val faces = InspireFace.ExecuteFaceTrack(session, stream)
+            val faces = InspireFace.ExecuteFaceTrack(session, stream) ?: return
             val endTime1 = System.currentTimeMillis() - startTime1
 
             if (faces.detectedNum == 0) {
@@ -101,13 +101,19 @@ class FaceCameraRecognizeActivity : AppCompatActivity() {
                 val startTime2 = System.currentTimeMillis()
                 val currentSession = InspireFaceConfig.session ?: return
                 val feature = InspireFace.ExtractFaceFeature(currentSession, stream, faces.tokens[i])
-                val result = InspireFace.FeatureHubFaceSearch(feature)
+                if (feature == null) {
+                    names[i] = "未知"
+                    continue
+                }
+                val result = InspireFace.FeatureHubFaceSearch(feature) ?: continue
                 val name = if (result.id >= 0) {
                     InspireFaceConfig.dbHelper?.queryNameById(result.id.toInt())
                 } else {
                     null
                 }
-                names[i] = "${name ?: "未知"} ${String.format("%.2f", result.searchConfidence * 100.0)}%"
+                // 1.2.4 起无匹配时 id 为 -1、置信度为 -1，此时只显示"未知"
+                names[i] = if (name.isNullOrEmpty()) "未知" else
+                    "$name ${String.format("%.2f", result.searchConfidence * 100.0)}%"
                 if (!name.isNullOrEmpty()) {
                     val endTime2 = System.currentTimeMillis() - startTime2
                     tvResult += "\n人脸${i + 1}:$name ${String.format("%.2f", result.searchConfidence * 100.0)}% 识别:${endTime2}ms "
@@ -117,7 +123,7 @@ class FaceCameraRecognizeActivity : AppCompatActivity() {
             val living = FloatArray(faces.detectedNum) { 0.0f }
             val faceList = mutableListOf<List<Point2f>>()
             for (i in 0 until faces.detectedNum) {
-                val facePoints = InspireFace.GetFaceDenseLandmarkFromFaceToken(faces.tokens[i])
+                val facePoints = InspireFace.GetFaceDenseLandmarkFromFaceToken(faces.tokens[i]) ?: continue
                 faceList.add(facePoints.toList())
             }
 

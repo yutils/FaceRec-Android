@@ -111,10 +111,10 @@ class FaceCameraRegisterActivity : AppCompatActivity() {
 
     private fun processBitmap(bitmap: Bitmap) {
         val startTime = System.currentTimeMillis()
-        val stream = InspireFace.CreateImageStreamFromBitmap(bitmap, InspireFace.CAMERA_ROTATION_0)
+        val stream = InspireFace.CreateImageStreamFromBitmap(bitmap, InspireFace.CAMERA_ROTATION_0) ?: return
         try {
             val session = InspireFaceConfig.session ?: return
-            val faces = InspireFace.ExecuteFaceTrack(session, stream)
+            val faces = InspireFace.ExecuteFaceTrack(session, stream) ?: return
 
             if (faces.detectedNum == 0) {
                 runOnUiThreadSafe { binding.faceOverlayView.clear() }
@@ -127,7 +127,7 @@ class FaceCameraRegisterActivity : AppCompatActivity() {
 
             val faceList = mutableListOf<List<Point2f>>()
             for (i in 0 until faces.detectedNum) {
-                val facePoints = InspireFace.GetFaceDenseLandmarkFromFaceToken(faces.tokens[i])
+                val facePoints = InspireFace.GetFaceDenseLandmarkFromFaceToken(faces.tokens[i]) ?: continue
                 faceList.add(facePoints.toList())
             }
             runOnUiThreadSafe {
@@ -140,7 +140,11 @@ class FaceCameraRegisterActivity : AppCompatActivity() {
             val currentSession = InspireFaceConfig.session ?: return
 
             InspireFaceConfig.deleteByName(name)
-            val feature = InspireFace.ExtractFaceFeature(currentSession, stream, faces.tokens[0])
+            val feature = InspireFace.ExtractFaceFeature(currentSession, stream, faces.tokens[0]) ?: run {
+                Log.w("FaceCameraRegister", "ExtractFaceFeature 返回空")
+                resetRegisterState("录入失败，请正对摄像头重试")
+                return
+            }
             val identity = FaceFeatureIdentity.create(-1, feature)
             if (InspireFace.FeatureHubInsertFeature(identity)) {
                 InspireFaceConfig.dbHelper?.insertName(identity.id.toInt(), name)

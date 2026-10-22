@@ -143,10 +143,10 @@ object InspireFaceConfig {
     //保存特征值
     fun saveCharacteristicAndName(bitmap: Bitmap, name: String): Boolean {
         val startTime = System.currentTimeMillis()
-        val stream = InspireFace.CreateImageStreamFromBitmap(bitmap, InspireFace.CAMERA_ROTATION_0)
+        val stream = InspireFace.CreateImageStreamFromBitmap(bitmap, InspireFace.CAMERA_ROTATION_0) ?: return false
         try {
-            if (session == null) return false
-            val faces = InspireFace.ExecuteFaceTrack(session, stream)
+            val currentSession = session ?: return false
+            val faces = InspireFace.ExecuteFaceTrack(currentSession, stream) ?: return false
             if (faces.detectedNum == 0) {
                 Log.w(TAG, "未检测到人脸")
                 return false
@@ -155,7 +155,7 @@ object InspireFaceConfig {
                 Log.w(TAG, "检测到多张人脸")
                 return false
             }
-            val feature = InspireFace.ExtractFaceFeature(session, stream, faces.tokens[0])
+            val feature = InspireFace.ExtractFaceFeature(currentSession, stream, faces.tokens[0]) ?: return false
             val identity = FaceFeatureIdentity.create(-1, feature)
             return if (InspireFace.FeatureHubInsertFeature(identity)) {
                 dbHelper?.insertName(identity.id.toInt(), name)
@@ -173,9 +173,10 @@ object InspireFaceConfig {
     fun haveFace(bitmap: Bitmap): Boolean? {
         return mutex {
             val stream = InspireFace.CreateImageStreamFromBitmap(bitmap, InspireFace.CAMERA_ROTATION_0)
-            if (session == null) return@mutex false
-            val faces = InspireFace.ExecuteFaceTrack(session, stream)
+                ?: return@mutex false
             try {
+                val currentSession = session ?: return@mutex false
+                val faces = InspireFace.ExecuteFaceTrack(currentSession, stream) ?: return@mutex false
                 return@mutex faces.detectedNum > 0
             } finally {
                 InspireFace.ReleaseImageStream(stream)
@@ -188,16 +189,16 @@ object InspireFaceConfig {
         return mutex {
             val featureList = mutableListOf<FaceFeature>()
             val stream = InspireFace.CreateImageStreamFromBitmap(bitmap, InspireFace.CAMERA_ROTATION_0)
-            if (session == null) return@mutex featureList
-            val faces = InspireFace.ExecuteFaceTrack(session, stream)
+                ?: return@mutex featureList
             try {
+                val currentSession = session ?: return@mutex featureList
+                val faces = InspireFace.ExecuteFaceTrack(currentSession, stream) ?: return@mutex featureList
                 if (faces.detectedNum == 0) {
                     return@mutex featureList
                 }
-                if (session == null) return@mutex featureList
 
                 for (i in 0 until faces.detectedNum) {
-                    val feature = InspireFace.ExtractFaceFeature(session, stream, faces.tokens[i])
+                    val feature = InspireFace.ExtractFaceFeature(currentSession, stream, faces.tokens[i]) ?: continue
                     featureList.add(feature)
                 }
                 return@mutex featureList
@@ -212,15 +213,15 @@ object InspireFaceConfig {
     fun faceFeature(bitmap: Bitmap): FaceFeature? {
         return mutex {
             val stream = InspireFace.CreateImageStreamFromBitmap(bitmap, InspireFace.CAMERA_ROTATION_0)
-            if (session == null) return@mutex null
-            val faces = InspireFace.ExecuteFaceTrack(session, stream)
+                ?: return@mutex null
             try {
+                val currentSession = session ?: return@mutex null
+                val faces = InspireFace.ExecuteFaceTrack(currentSession, stream) ?: return@mutex null
                 if (faces.detectedNum == 0) {
                     return@mutex null
                 }
-                if (session == null) return@mutex null
-                val feature = InspireFace.ExtractFaceFeature(session, stream, faces.tokens[0])
-                return@mutex feature //人脸特征值
+                //人脸特征值
+                return@mutex InspireFace.ExtractFaceFeature(currentSession, stream, faces.tokens[0])
             } finally {
                 InspireFace.ReleaseImageStream(stream)
             }
@@ -229,7 +230,7 @@ object InspireFaceConfig {
 
     //通过特征值查询
     fun query(faceFeature: FaceFeature): String? {
-        val result = InspireFace.FeatureHubFaceSearch(faceFeature)
+        val result = InspireFace.FeatureHubFaceSearch(faceFeature) ?: return null
         if (result.id == -1L) return null
         val name = dbHelper?.queryNameById(result.id.toInt())
         return name

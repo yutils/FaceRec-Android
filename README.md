@@ -9,6 +9,30 @@
 **本项目是基于开源项目 https://github.com/HyperInspire/InspireFace**
 
 
+## SDK 版本
+
+`inspireface` 模块当前内置 **InspireFace Android SDK 1.2.4.post1**（native 1.2.4，C API Level 2），
+取自上游 tag `v1.2.4.post1`：
+
+| 项目 | 说明 |
+| --- | --- |
+| ABI | `arm64-v8a`、`armeabi-v7a`、`x86_64`（x86_64 用于模拟器调试，上游自 1.2.4 起提供） |
+| minSdk | **24**（1.2.4 起 native 库最低要求，`app` 与 `inspireface` 模块已同步） |
+| 模型 | 只保留 `Pikachu`（t4.0），未打包 61MB 的 `Megatron` |
+| 头文件/清单 | `inspireface/sdk/1.2.4/`（C 头文件、API manifest、SHA256SUMS） |
+
+升级要点：新版本在 native 失败时可能返回 `null`（`ExecuteFaceTrack` / `ExtractFaceFeature` /
+`FeatureHubFaceSearch`），无匹配时 `FeatureHubFaceSearch` 返回 `id = -1`、`searchConfidence = -1`，
+业务代码已按此补齐空判断。
+
+### 更新说明（1.1.13 → 1.2.4.post1）
+
+1. 替换 `inspireface/libs/<abi>/libInspireFace.so`，新增 `x86_64`
+2. 同步 `inspireface/src/main/java` 全部 Java 源码（新增 JNI 全量接口、`FaceCapture`、快照等）
+3. 同步模型资源 `Pikachu`（t4.0）与 `version.txt`，更新 `consumer-rules.pro`（JNI 类保留规则）
+4. `inspireface` 与 `app` 的 `minSdk` 由 22 提升到 24，`abiFilters` 增加 `x86_64`
+
+
 ## 项目目的
     为了研究人脸识别app，以及为了体验做出demo的成就感。
     之前版本没有UI太痛苦了

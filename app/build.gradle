@@ -8,11 +8,14 @@ android {
     compileSdk 35
     defaultConfig {
         applicationId "com.kotlinx.inspireface"
-        minSdk 22
+        // InspireFace 1.2.4 起 native 库最低要求 API 24
+        minSdk 24
         targetSdk 35
         versionCode 3
         versionName "0.0.3"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        // 显式声明打包的 ABI：x86_64 供模拟器（雷电）使用
+        ndk { abiFilters "armeabi-v7a", "arm64-v8a", "x86_64" }
     }
     buildTypes {
         release {

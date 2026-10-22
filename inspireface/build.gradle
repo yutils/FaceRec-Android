@@ -2,31 +2,44 @@ plugins {
     alias(libs.plugins.android.library)
     id 'maven-publish'
 }
+
+version = '1.2.4.post1'
+
 android {
     namespace 'com.insightface.sdk.inspireface'
     compileSdk 34
+
     defaultConfig {
-        minSdk 22
+        minSdk 24
+        versionCode 1
+        versionName project.version.toString()
+
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles "consumer-rules.pro"
-        ndk { abiFilters "armeabi-v7a", "arm64-v8a" }
+
+        // x86_64 用于模拟器（雷电 / AVD），上游 1.2.4 起提供该架构
+        ndk { abiFilters "armeabi-v7a", "arm64-v8a", "x86_64" }
     }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+
     sourceSets {
         main {
             jniLibs.srcDirs = ['libs']
             assets.srcDirs = ['src/main/assets']
         }
     }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+
     publishing {
         singleVariant('release') {
             withSourcesJar()
@@ -34,13 +47,16 @@ android {
         }
     }
 }
+
 dependencies {
+
     implementation libs.appcompat
     implementation libs.material
     testImplementation libs.junit
     androidTestImplementation libs.ext.junit
     androidTestImplementation libs.espresso.core
 }
+
 afterEvaluate {
     publishing {
         publications {
@@ -49,7 +65,7 @@ afterEvaluate {
                 from components.release // release (jitpack will not be used)
                 groupId = 'com.github.HyperInspire' // groupId Arbitrary, this is the dependent library group id
                 artifactId = 'inspireface-android-sdk'  // artifactId Arbitrary, dependent library name (jitpack will not use)
-                version = '1.2.1' // The current version depends on the library version number, which is not used by this jitpack, but only by us developers
+                version = project.version.toString()
             }
         }
     }

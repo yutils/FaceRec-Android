@@ -39,10 +39,10 @@ class FaceRecognizeActivity : AppCompatActivity() {
     private fun recognizeBitmap(bitmap: android.graphics.Bitmap) {
         InspireFaceConfig.mutex {
             val startTime1 = System.currentTimeMillis()
-            val stream = InspireFace.CreateImageStreamFromBitmap(bitmap, InspireFace.CAMERA_ROTATION_0)
+            val stream = InspireFace.CreateImageStreamFromBitmap(bitmap, InspireFace.CAMERA_ROTATION_0) ?: return@mutex
             try {
                 val session = InspireFaceConfig.session ?: return@mutex
-                val faces = InspireFace.ExecuteFaceTrack(session, stream)
+                val faces = InspireFace.ExecuteFaceTrack(session, stream) ?: return@mutex
                 val endTime1 = System.currentTimeMillis() - startTime1
 
                 if (faces.detectedNum == 0) {
@@ -58,9 +58,9 @@ class FaceRecognizeActivity : AppCompatActivity() {
                     val startTime2 = System.currentTimeMillis()
                     val currentSession = InspireFaceConfig.session ?: return@mutex
                     //提取面部特征
-                    val feature = InspireFace.ExtractFaceFeature(currentSession, stream, faces.tokens[i])
+                    val feature = InspireFace.ExtractFaceFeature(currentSession, stream, faces.tokens[i]) ?: continue
                     //从特征中心搜索人脸特征
-                    val searchResult = InspireFace.FeatureHubFaceSearch(feature)
+                    val searchResult = InspireFace.FeatureHubFaceSearch(feature) ?: continue
                     val name = if (searchResult.id >= 0) {
                         InspireFaceConfig.dbHelper?.queryNameById(searchResult.id.toInt())
                     } else {
@@ -70,7 +70,8 @@ class FaceRecognizeActivity : AppCompatActivity() {
                         runOnUiThread {
                             Toast.makeText(this, "未找到匹配用户", Toast.LENGTH_SHORT).show()
                         }
-                        tvResult += "\n人脸${i + 1}:未知 ${String.format("%.2f", searchResult.searchConfidence * 100.0)}%"
+                        // 1.2.4 起无匹配时置信度为 -1，不再显示百分比
+                        tvResult += "\n人脸${i + 1}:未知"
                         continue
                     }
                     val endTime2 = System.currentTimeMillis() - startTime2

@@ -13,56 +13,36 @@ import java.io.IOException;
 import java.io.InputStream;
 
 public class SDKUtils {
-    static public boolean copyFilesFromAssets(Context context, String oldPath, String newPath) {
+    static public void copyFilesFromAssets(Context context, String oldPath, String newPath) {
         try {
-            // 获取Assets中指定路径下的所有文件和文件夹名称
             String[] fileNames = context.getAssets().list(oldPath);
-
             if (fileNames.length > 0) {
-                // 如果是目录，则创建对应目录并递归处理子项
+                // directory
                 File file = new File(newPath);
-                if (!file.exists() && !file.mkdirs()) {
-                    Log.e("SDKUtils", "Failed to create directory: " + newPath);
-                    return false;
+                if (!file.mkdir()) {
+                    Log.d("mkdir", "can't make folder");
                 }
+//                    return false;                // copy recursively
                 for (String fileName : fileNames) {
-                    if (!copyFilesFromAssets(context,
-                            oldPath + File.separator + fileName,
-                            newPath + File.separator + fileName)) {
-                        return false;
-                    }
+                    copyFilesFromAssets(context, oldPath + "/" + fileName,
+                            newPath + "/" + fileName);
                 }
             } else {
-                // 如果是文件，则检查目标文件是否已存在
-                File targetFile = new File(newPath);
-                if (targetFile.exists()) {
-                    Log.d("SDKUtils", "人脸识别sdk文件存在: " + newPath);
-                    return true; // 文件已存在，视为操作成功
+                // file
+                InputStream is = context.getAssets().open(oldPath);
+                FileOutputStream fos = new FileOutputStream(new File(newPath));
+                byte[] buffer = new byte[1024];
+                int byteCount;
+                while ((byteCount = is.read(buffer)) != -1) {
+                    fos.write(buffer, 0, byteCount);
                 }
-
-                // 确保父目录存在
-                File parentDir = targetFile.getParentFile();
-                if (parentDir != null && !parentDir.exists() && !parentDir.mkdirs()) {
-                    Log.e("SDKUtils", "创建父目录: " + parentDir.getAbsolutePath());
-                    return false;
-                }
-
-                // 使用try-with-resources自动管理资源
-                try (InputStream is = context.getAssets().open(oldPath);
-                     FileOutputStream fos = new FileOutputStream(targetFile)) {
-                    byte[] buffer = new byte[4096]; // 增大缓冲区提高性能
-                    int byteCount;
-                    while ((byteCount = is.read(buffer)) != -1) {
-                        fos.write(buffer, 0, byteCount);
-                    }
-                    fos.flush();
-                    Log.d("SDKUtils", "人脸识别sdk文件复制成功: " + newPath);
-                }
+                fos.flush();
+                is.close();
+                fos.close();
             }
-            return true;
         } catch (Exception e) {
-            Log.e("SDKUtils", "错误，旧文件: " + oldPath + " 复制到： " + newPath, e);
-            return false;
+            // TODO Auto-generated catch block
+            e.printStackTrace();
         }
     }
 
@@ -124,6 +104,7 @@ public class SDKUtils {
         return true;
     }
 
+
     public static Bitmap getImageFromAssetsFile(Context context, String fileName) {
         Bitmap image = null;
         AssetManager am = context.getResources().getAssets();
@@ -134,7 +115,10 @@ public class SDKUtils {
         } catch (IOException e) {
             e.printStackTrace();
         }
+
         return image;
     }
+
+
 
 }
