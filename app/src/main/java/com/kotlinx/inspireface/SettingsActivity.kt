@@ -2,7 +2,6 @@ package com.kotlinx.inspireface
 
 import android.os.Bundle
 import android.widget.Toast
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import com.insightface.sdk.inspireface.InspireFace
 import com.kotlinx.inspireface.config.InspireFaceConfig
@@ -13,7 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class SettingsActivity : AppCompatActivity() {
+class SettingsActivity : BaseActivity() {
     private lateinit var binding: ActivitySettingsBinding
     private var switching = false
 
@@ -21,6 +20,8 @@ class SettingsActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivitySettingsBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        setupToolbar(binding.toolbar, "设置")
+        applyInsets(binding.root, ime = true)
 
         binding.radioMegatron.text = ModelManager.optionOf(InspireFace.MEGATRON).label
         binding.radioPikachu.text = ModelManager.optionOf(InspireFace.PIKACHU).label
@@ -41,7 +42,6 @@ class SettingsActivity : AppCompatActivity() {
         binding.btnApply.setOnClickListener {
             applyModel(selectedFromRadio())
         }
-        binding.btnBack.setOnClickListener { finish() }
     }
 
     override fun onResume() {
@@ -106,9 +106,9 @@ class SettingsActivity : AppCompatActivity() {
     private fun updateCurrentModelText() {
         val current = InspireFaceConfig.currentModelName
         binding.tvCurrentModel.text = if (current != null && InspireFaceConfig.session != null) {
-            "当前运行模型：${ModelManager.labelOf(current)}"
+            ModelManager.labelOf(current)
         } else {
-            "当前运行模型：未加载"
+            "未加载"
         }
     }
 

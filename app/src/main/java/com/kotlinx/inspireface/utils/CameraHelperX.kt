@@ -10,6 +10,7 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
+import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -33,7 +34,8 @@ class CameraHelperX(val activity: AppCompatActivity) : DefaultLifecycleObserver 
     private var isReleased = false
 
     private var latestBitmap: Bitmap? = null
-    var cameraSelector: CameraSelector? = null
+    @Volatile
+    private var isFrontCamera = false
     var onBitmapReady: ((Bitmap) -> Unit)? = null
 
     init {
@@ -49,31 +51,36 @@ class CameraHelperX(val activity: AppCompatActivity) : DefaultLifecycleObserver 
         height: Int = 480,
     ) {
         if (isReleased) return
-        this.cameraSelector = cameraSelector
+        isFrontCamera = cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA
         val cameraProviderFuture = ProcessCameraProvider.getInstance(activity)
         cameraProviderFuture.addListener({
             if (isReleased) return@addListener
             try {
-                cameraProvider = cameraProviderFuture.get()
+                val provider = cameraProviderFuture.get()
+                cameraProvider = provider
 
                 val preview = Preview.Builder().setResolutionSelector(
-                    ResolutionSelector.Builder().setResolutionStrategy(
-                        ResolutionStrategy(
-                            Size(width, height),
-                            ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER,
-                        ),
-                    ).build(),
+                    ResolutionSelector.Builder()
+                        .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
+                        .setResolutionStrategy(
+                            ResolutionStrategy(
+                                Size(width, height),
+                                ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER,
+                            ),
+                        ).build(),
                 )
                     .build()
                     .also { it.surfaceProvider = previewView.surfaceProvider }
 
                 val imageAnalysis = ImageAnalysis.Builder().setResolutionSelector(
-                    ResolutionSelector.Builder().setResolutionStrategy(
-                        ResolutionStrategy(
-                            Size(width, height),
-                            ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER,
-                        ),
-                    ).build(),
+                    ResolutionSelector.Builder()
+                        .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
+                        .setResolutionStrategy(
+                            ResolutionStrategy(
+                                Size(width, height),
+                                ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER,
+                            ),
+                        ).build(),
                 )
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .build()
@@ -82,10 +89,14 @@ class CameraHelperX(val activity: AppCompatActivity) : DefaultLifecycleObserver 
                     processImage(imageProxy)
                 }
 
-                cameraProvider?.unbindAll()
+                provider.unbindAll()
 
-                if (hasCamera(cameraProvider!!, cameraSelector)) {
-                    cameraProvider?.bindToLifecycle(activity, cameraSelector, preview, imageAnalysis)
+                if (hasCamera(provider, cameraSelector)) {
+                    provider.bindToLifecycle(activity, cameraSelector, preview, imageAnalysis)
+                } else if (!isReleased) {
+                    activity.runOnUiThread {
+                        Toast.makeText(activity, "未找到可用的摄像头", Toast.LENGTH_SHORT).show()
+                    }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -120,19 +131,38 @@ class CameraHelperX(val activity: AppCompatActivity) : DefaultLifecycleObserver 
         try {
             val rawBitmap = imageProxy.toBitmap()
             val rotationDegrees = imageProxy.imageInfo.rotationDegrees
-            val matrix = Matrix()
+            var bitmap = rawBitmap
             if (rotationDegrees != 0) {
-                matrix.postRotate(rotationDegrees.toFloat())
+                val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
+                val rotated = Bitmap.createBitmap(
+                    rawBitmap,
+                    0,
+                    0,
+                    rawBitmap.width,
+                    rawBitmap.height,
+                    matrix,
+                    true,
+                )
+                if (rotated !== rawBitmap) rawBitmap.recycle()
+                bitmap = rotated
             }
-            if (cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA) {
-                matrix.postScale(-1f, 1f, rawBitmap.width / 2f, rawBitmap.height / 2f)
-            }
-            val bitmap = if (matrix.isIdentity) {
-                rawBitmap
-            } else {
-                Bitmap.createBitmap(rawBitmap, 0, 0, rawBitmap.width, rawBitmap.height, matrix, true).also {
-                    if (it !== rawBitmap) rawBitmap.recycle()
+            // PreviewView 的前置预览是镜像的；先旋转到显示方向，再镜像，保证人脸框与预览一致
+            if (isFrontCamera) {
+                val matrix = Matrix().apply {
+                    setScale(-1f, 1f)
+                    postTranslate(bitmap.width.toFloat(), 0f)
                 }
+                val mirrored = Bitmap.createBitmap(
+                    bitmap,
+                    0,
+                    0,
+                    bitmap.width,
+                    bitmap.height,
+                    matrix,
+                    true,
+                )
+                if (mirrored !== bitmap) bitmap.recycle()
+                bitmap = mirrored
             }
             recycleLatestBitmap()
             latestBitmap = bitmap
@@ -156,9 +186,10 @@ class CameraHelperX(val activity: AppCompatActivity) : DefaultLifecycleObserver 
         isReleased = true
         onBitmapReady = null
         cameraProvider?.unbindAll()
+        cameraProvider = null
         executor.shutdown()
-        // 不在主线程阻塞等待，shutdown() 会等当前帧任务自然结束
-        recycleLatestBitmap()
+        // 不能在这里 recycle latestBitmap：当前分析帧可能仍在回调中读取它
+        latestBitmap = null
         activity.lifecycle.removeObserver(this)
     }
 }

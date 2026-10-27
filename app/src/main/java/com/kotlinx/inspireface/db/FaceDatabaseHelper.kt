@@ -18,25 +18,25 @@ class FaceDatabaseHelper(context: Context, val dbPath: String = context.let { (i
     }
 
     // 插入或更新名称
-    fun insertName(id: Int, name: String) {
+    fun insertName(id: Int, name: String): Boolean {
         val values = ContentValues().apply {
             put("id", id)
             put("name", name)
         }
-        // use 会自动关闭数据库连接
-        writableDatabase.use { db ->
-            db.insertWithOnConflict("face_info", null, values, SQLiteDatabase.CONFLICT_REPLACE)
-        }
+        return writableDatabase.insertWithOnConflict(
+            "face_info",
+            null,
+            values,
+            SQLiteDatabase.CONFLICT_REPLACE,
+        ) != -1L
     }
 
     // 根据 id 查询名称
     fun queryNameById(id: Int): String? {
-        var name : String? = null
-        readableDatabase.use { db ->
-            db.rawQuery("SELECT name FROM face_info WHERE id = ?", arrayOf(id.toString())).use { cursor ->
-                if (cursor.moveToFirst()) {
-                    name = cursor.getString(0)
-                }
+        var name: String? = null
+        readableDatabase.rawQuery("SELECT name FROM face_info WHERE id = ?", arrayOf(id.toString())).use { cursor ->
+            if (cursor.moveToFirst()) {
+                name = cursor.getString(0)
             }
         }
         return name
@@ -45,20 +45,13 @@ class FaceDatabaseHelper(context: Context, val dbPath: String = context.let { (i
     // 根据 Name 查询全部用户
     fun queryNameByName(name: String): MutableList<User> {
         val list = mutableListOf<User>()
-        readableDatabase.use { db ->
-            db.rawQuery("SELECT * FROM face_info WHERE name = ?", arrayOf(name)).use { cursor ->
-                // 遍历查询结果
-                while (cursor.moveToNext()) {
-                    // 获取字段索引
-                    val idIndex = cursor.getColumnIndex("id")
-                    val nameIndex = cursor.getColumnIndex("name")
-                    // 从游标中获取数据
-                    val id = cursor.getInt(idIndex)
-                    val userName = cursor.getString(nameIndex)
-
-                    // 创建User对象并添加到列表
-                    list.add(User(id, userName))
-                }
+        readableDatabase.rawQuery("SELECT * FROM face_info WHERE name = ?", arrayOf(name)).use { cursor ->
+            while (cursor.moveToNext()) {
+                val idIndex = cursor.getColumnIndex("id")
+                val nameIndex = cursor.getColumnIndex("name")
+                val id = cursor.getInt(idIndex)
+                val userName = cursor.getString(nameIndex)
+                list.add(User(id, userName))
             }
         }
         return list
@@ -66,28 +59,22 @@ class FaceDatabaseHelper(context: Context, val dbPath: String = context.let { (i
 
     // 根据 id 删除名称
     fun deleteById(id: Int): Int {
-        return writableDatabase.use { db ->
-            db.delete("face_info", "id = ?", arrayOf(id.toString()))
-        }
+        return writableDatabase.delete("face_info", "id = ?", arrayOf(id.toString()))
     }
 
     // 根据 name 删除名称
     fun deleteByName(name: String): Int {
-        return writableDatabase.use { db ->
-            db.delete("face_info", "name = ?", arrayOf(name))
-        }
+        return writableDatabase.delete("face_info", "name = ?", arrayOf(name))
     }
 
     // 获取所有用户信息
     fun getAllUsers(): List<User> {
         val users = mutableListOf<User>()
-        readableDatabase.use { db ->
-            db.rawQuery("SELECT id, name FROM face_info ORDER BY id ASC", null).use { cursor ->
-                while (cursor.moveToNext()) {
-                    val id = cursor.getInt(0)
-                    val name = cursor.getString(1)
-                    users.add(User(id, name))
-                }
+        readableDatabase.rawQuery("SELECT id, name FROM face_info ORDER BY id ASC", null).use { cursor ->
+            while (cursor.moveToNext()) {
+                val id = cursor.getInt(0)
+                val name = cursor.getString(1)
+                users.add(User(id, name))
             }
         }
         return users
@@ -98,9 +85,6 @@ class FaceDatabaseHelper(context: Context, val dbPath: String = context.let { (i
         val values = ContentValues().apply {
             put("name", newName)
         }
-        // use 会自动关闭数据库连接
-        writableDatabase.use { db ->
-            db.update("face_info", values, "id = ?", arrayOf(id.toString()))
-        }
+        writableDatabase.update("face_info", values, "id = ?", arrayOf(id.toString()))
     }
 }

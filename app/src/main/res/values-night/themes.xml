@@ -1,7 +1,5 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
-    <style name="Base.Theme.InspireFaceExample" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your dark theme here. -->
-        <!-- <item name="colorPrimary">@color/my_dark_primary</item> -->
-    </style>
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 深色模式沿用 values 中的完整 Base 主题，仅覆盖颜色资源 -->
+    <style name="Theme.InspireFaceExample" parent="Base.Theme.InspireFaceExample" />
 </resources>

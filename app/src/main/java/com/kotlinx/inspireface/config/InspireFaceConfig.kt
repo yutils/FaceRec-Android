@@ -1,9 +1,9 @@
 package com.kotlinx.inspireface.config
 
 import android.app.Application
+import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
-import android.widget.Toast
 import com.insightface.sdk.inspireface.InspireFace
 import com.insightface.sdk.inspireface.base.CustomParameter
 import com.insightface.sdk.inspireface.base.FaceFeature
@@ -41,6 +41,9 @@ if (userName != null) { /*用户*/}
 @Suppress("unused")
 object InspireFaceConfig {
     private val TAG = "InspireFace"
+    private const val DB_PREFS_NAME = "inspireface_db_state"
+    private const val KEY_CHAR_DB = "char_db_path"
+    private const val KEY_NAME_DB = "name_db_path"
     @Volatile
     var dbHelper: FaceDatabaseHelper? = null
     @Volatile
@@ -78,13 +81,20 @@ object InspireFaceConfig {
     fun ensureInitialized(context: Application) {
         val selectedModel = ModelManager.selectedModel(context)
         if (initialized && session != null && currentModelName == selectedModel && InspireFace.QueryLaunchStatus()) return
-        init(context)
+        // 与切换模型共用互斥锁，避免切换过程中其他页面并发初始化 SDK
+        mutex {
+            val currentSelected = ModelManager.selectedModel(context)
+            if (initialized && session != null && currentModelName == currentSelected && InspireFace.QueryLaunchStatus()) {
+                return@mutex
+            }
+            init(context)
+        }
     }
 
     fun init(
         context: Application,
-        persistenceDbPath: String = context.let { (it.getExternalFilesDir("")?.absolutePath ?: it.filesDir.path) + "/face_characteristic_1.db" },
-        faceNameDbPath: String = context.let { (it.getExternalFilesDir("")?.absolutePath ?: it.filesDir.path) + "/face_name_1.db" },
+        persistenceDbPath: String? = null,
+        faceNameDbPath: String? = null,
     ) {
         val selectedModel = ModelManager.selectedModel(context)
         if (initialized && session != null && currentModelName == selectedModel && InspireFace.QueryLaunchStatus()) {
@@ -123,11 +133,32 @@ object InspireFaceConfig {
         searchThreshold = InspireFace.GetRecommendedCosineThreshold().takeIf { it > 0f } ?: 0.42f
         Log.i(TAG, "模型 $selectedModel 推荐余弦阈值: $searchThreshold，特征长度: ${InspireFace.GetFeatureLength()}")
 
-        setDB(persistenceDbPath, faceNameDbPath)
+        var dbPair = if (persistenceDbPath != null && faceNameDbPath != null) {
+            persistenceDbPath to faceNameDbPath
+        } else {
+            savedDbPair(context) ?: defaultDbPair(context)
+        }
+        var dbReady = setDB(dbPair.first, dbPair.second)
+        if (!dbReady) {
+            val fallback = defaultDbPair(context)
+            if (fallback != dbPair) {
+                Log.w(TAG, "上次使用的特征库不可用，回退到默认数据库: $fallback")
+                dbPair = fallback
+                dbReady = setDB(dbPair.first, dbPair.second)
+            }
+        }
+        if (!dbReady) {
+            Log.e(TAG, "特征库启用失败，暂不创建 Session")
+            initialized = false
+            session = null
+            return
+        }
+        saveDbPair(context, dbPair.first, dbPair.second)
+
         InspireFace.FeatureHubFaceSearchThresholdSetting(searchThreshold)
         session = InspireFace.CreateSession(customParameter, InspireFace.DETECT_MODE_ALWAYS_DETECT, 10, -1, -1)
         initialized = session != null
-        Log.d(TAG, "Session 创建完成: ${session != null}")
+        Log.d(TAG, "Session 创建完成: ${session != null}，特征库: ${dbPair.second}")
     }
 
     /**
@@ -176,8 +207,6 @@ object InspireFaceConfig {
         if (currentPersistenceDbPath == persistenceDbPath && currentFaceNameDbPath == faceNameDbPath) {
             return true
         }
-        currentPersistenceDbPath = persistenceDbPath
-        currentFaceNameDbPath = faceNameDbPath
 
         InspireFace.FeatureHubDataDisable()
         val configuration = InspireFace.CreateFeatureHubConfiguration()
@@ -190,16 +219,62 @@ object InspireFaceConfig {
         val hubDataEnable = InspireFace.FeatureHubDataEnable(configuration)
         Log.d(TAG, "启用特征数据库状态: $hubDataEnable 路径：${persistenceDbPath}")
 
+        if (!hubDataEnable) {
+            currentPersistenceDbPath = ""
+            currentFaceNameDbPath = ""
+            dbHelper?.close()
+            dbHelper = null
+            return false
+        }
+
+        currentPersistenceDbPath = persistenceDbPath
+        currentFaceNameDbPath = faceNameDbPath
         dbHelper?.close()
         dbHelper = FaceDatabaseHelper(context!!, faceNameDbPath)
 
         Log.d(TAG, "特征值关系库路径：${faceNameDbPath}")
-        return hubDataEnable
+        return true
     }
 
     /** 切换数据库，带互斥锁，可在相机运行时安全调用 */
     fun switchDB(persistenceDbPath: String, faceNameDbPath: String): Boolean {
-        return mutex { setDB(persistenceDbPath, faceNameDbPath) } ?: false
+        return mutex {
+            val previousPersistence = currentPersistenceDbPath
+            val previousFaceName = currentFaceNameDbPath
+            val success = setDB(persistenceDbPath, faceNameDbPath)
+            if (success) {
+                context?.let { saveDbPair(it, persistenceDbPath, faceNameDbPath) }
+            } else {
+                // 新库启用失败时尽量恢复原库，避免整个识别功能不可用
+                if (previousPersistence.isNotEmpty() && previousFaceName.isNotEmpty()) {
+                    val restored = setDB(previousPersistence, previousFaceName)
+                    if (!restored) initialized = false
+                } else {
+                    initialized = false
+                }
+            }
+            success
+        } ?: false
+    }
+
+    private fun defaultDbPair(context: Context): Pair<String, String> {
+        val base = context.getExternalFilesDir("")?.absolutePath ?: context.filesDir.path
+        return "$base/face_characteristic_1.db" to "$base/face_name_1.db"
+    }
+
+    private fun savedDbPair(context: Context): Pair<String, String>? {
+        val prefs = context.getSharedPreferences(DB_PREFS_NAME, Context.MODE_PRIVATE)
+        val charPath = prefs.getString(KEY_CHAR_DB, null) ?: return null
+        val namePath = prefs.getString(KEY_NAME_DB, null) ?: return null
+        return charPath to namePath
+    }
+
+    private fun saveDbPair(context: Context, charDbPath: String, nameDbPath: String) {
+        context.getSharedPreferences(DB_PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_CHAR_DB, charDbPath)
+            .putString(KEY_NAME_DB, nameDbPath)
+            .apply()
     }
 
     //保存特征值
@@ -218,16 +293,47 @@ object InspireFaceConfig {
                 return false
             }
             val feature = InspireFace.ExtractFaceFeature(currentSession, stream, faces.tokens[0]) ?: return false
-            val identity = FaceFeatureIdentity.create(-1, feature)
-            return if (InspireFace.FeatureHubInsertFeature(identity)) {
-                dbHelper?.insertName(identity.id.toInt(), name)
-                true
-            } else {
-                false
-            }
+            return saveFeature(feature, name)
         } finally {
             InspireFace.ReleaseImageStream(stream)
             Log.i(TAG, "耗时：${System.currentTimeMillis() - startTime} ms")
+        }
+    }
+
+    /**
+     * 保存特征并写入名称。同名用户会在新特征写入成功后替换，避免失败时丢失旧数据。
+     * 调用方必须已持有 [inspireFaceMutex]。
+     */
+    fun saveFeature(faceFeature: FaceFeature, name: String): Boolean {
+        val db = dbHelper ?: run {
+            Log.w(TAG, "名称数据库未初始化")
+            return false
+        }
+        val oldUsers = try {
+            db.queryNameByName(name)
+        } catch (e: Exception) {
+            Log.e(TAG, "查询同名用户失败", e)
+            return false
+        }
+
+        val identity = FaceFeatureIdentity.create(-1, faceFeature)
+        if (!InspireFace.FeatureHubInsertFeature(identity)) return false
+
+        return try {
+            if (!db.insertName(identity.id.toInt(), name)) {
+                InspireFace.FeatureHubFaceRemove(identity.id)
+                return false
+            }
+            oldUsers.forEach { old ->
+                if (old.id.toLong() != identity.id) {
+                    deleteById(old.id.toLong())
+                }
+            }
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "保存人脸特征失败", e)
+            InspireFace.FeatureHubFaceRemove(identity.id)
+            false
         }
     }
 
@@ -273,55 +379,60 @@ object InspireFaceConfig {
 
     //提取第一张人脸特征值
     fun faceFeature(bitmap: Bitmap): FaceFeature? {
-        return mutex {
-            val stream = InspireFace.CreateImageStreamFromBitmap(bitmap, InspireFace.CAMERA_ROTATION_0)
-                ?: return@mutex null
-            try {
-                val currentSession = session ?: return@mutex null
-                val faces = InspireFace.ExecuteFaceTrack(currentSession, stream) ?: return@mutex null
-                if (faces.detectedNum == 0) {
-                    return@mutex null
-                }
-                //人脸特征值
-                return@mutex InspireFace.ExtractFaceFeature(currentSession, stream, faces.tokens[0])
-            } finally {
-                InspireFace.ReleaseImageStream(stream)
+        return mutex { faceFeatureInternal(bitmap) }
+    }
+
+    private fun faceFeatureInternal(bitmap: Bitmap): FaceFeature? {
+        val stream = InspireFace.CreateImageStreamFromBitmap(bitmap, InspireFace.CAMERA_ROTATION_0)
+            ?: return null
+        try {
+            val currentSession = session ?: return null
+            val faces = InspireFace.ExecuteFaceTrack(currentSession, stream) ?: return null
+            if (faces.detectedNum == 0) {
+                return null
             }
+            return InspireFace.ExtractFaceFeature(currentSession, stream, faces.tokens[0])
+        } finally {
+            InspireFace.ReleaseImageStream(stream)
         }
     }
 
     //通过特征值查询
     fun query(faceFeature: FaceFeature): String? {
-        val result = InspireFace.FeatureHubFaceSearch(faceFeature) ?: return null
-        if (result.id == -1L) return null
-        val name = dbHelper?.queryNameById(result.id.toInt())
-        return name
+        return mutex {
+            val result = InspireFace.FeatureHubFaceSearch(faceFeature) ?: return@mutex null
+            if (result.feature == null) {
+                null
+            } else {
+                dbHelper?.queryNameById(result.id.toInt())
+            }
+        }
     }
 
     //通过bitmap查询
     fun query(bitmap: Bitmap): String? {
-        faceFeature(bitmap)?.let {
-            return query(it)
+        return mutex {
+            val feature = faceFeatureInternal(bitmap) ?: return@mutex null
+            val result = InspireFace.FeatureHubFaceSearch(feature) ?: return@mutex null
+            if (result.feature == null) {
+                null
+            } else {
+                dbHelper?.queryNameById(result.id.toInt())
+            }
         }
-        return null
     }
 
     //保存特征值
     fun save(faceFeature: FaceFeature, name: String): Boolean {
-        val identity = FaceFeatureIdentity.create(-1, faceFeature)
-        if (InspireFace.FeatureHubInsertFeature(identity)) {
-            dbHelper?.insertName(identity.id.toInt(), name)
-            return true
-        }
-        return false
+        return mutex { saveFeature(faceFeature, name) } ?: false
     }
 
     //保存特征值
     fun save(bitmap: Bitmap, name: String): Boolean {
-        faceFeature(bitmap)?.let {
-            return save(it, name)
-        }
-        return false
+        return mutex {
+            val feature = faceFeatureInternal(bitmap) ?: return@mutex false
+            saveFeature(feature, name)
+        } ?: false
     }
 
     //根据特征值id删除

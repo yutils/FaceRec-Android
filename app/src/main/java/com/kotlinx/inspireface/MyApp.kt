@@ -13,6 +13,6 @@ class MyApp : Application() {
         super.onCreate()
         instance = this
         // SDK 生命周期跟随 Application，避免 MainActivity 销毁后子页面仍在使用导致崩溃
-        InspireFaceConfig.init(this)
+        InspireFaceConfig.ensureInitialized(this)
     }
 }

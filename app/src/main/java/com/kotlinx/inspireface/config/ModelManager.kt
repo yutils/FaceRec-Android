@@ -26,6 +26,7 @@ object ModelManager {
     data class ModelOption(
         val name: String,
         val label: String,
+        val chipLabel: String,
         val description: String,
     )
 
@@ -33,11 +34,13 @@ object ModelManager {
         ModelOption(
             name = InspireFace.MEGATRON,
             label = "Megatron（高精度 · 61 MB）",
+            chipLabel = "Megatron · 高精度",
             description = "使用 R18 特征模型，识别精度更高，检测模型也更大，速度略慢。",
         ),
         ModelOption(
             name = InspireFace.PIKACHU,
             label = "Pikachu（轻量快速 · 17 MB）",
+            chipLabel = "Pikachu · 轻量快速",
             description = "使用轻量特征模型，启动和识别速度更快，适合配置较低的设备。",
         ),
     )

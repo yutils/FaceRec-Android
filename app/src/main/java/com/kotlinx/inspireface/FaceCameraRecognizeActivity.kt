@@ -5,7 +5,6 @@ import android.graphics.Bitmap
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
 import com.insightface.sdk.inspireface.InspireFace
 import com.insightface.sdk.inspireface.base.Point2f
@@ -14,7 +13,9 @@ import com.kotlinx.inspireface.databinding.ActivityCameraRecognizeBinding
 import com.kotlinx.inspireface.utils.CameraHelperX
 
 // 人脸识别，相机实时获取
-class FaceCameraRecognizeActivity : AppCompatActivity() {
+class FaceCameraRecognizeActivity : BaseActivity() {
+    override val lightStatusBarIcons: Boolean = true
+
     private lateinit var binding: ActivityCameraRecognizeBinding
     private lateinit var cameraHelperX: CameraHelperX
     private var cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
@@ -24,6 +25,9 @@ class FaceCameraRecognizeActivity : AppCompatActivity() {
         binding = ActivityCameraRecognizeBinding.inflate(layoutInflater)
         setContentView(binding.root)
         InspireFaceConfig.ensureInitialized(MyApp.instance)
+        binding.btnBack.setOnClickListener { finish() }
+        applyInsets(binding.topBar, bottom = false)
+        applyInsets(binding.panel, top = false, bottom = true)
 
         cameraHelperX = CameraHelperX(this)
         activityResultRegistry.register("CAMERA-YUJI", ActivityResultContracts.RequestPermission()) {
@@ -32,6 +36,7 @@ class FaceCameraRecognizeActivity : AppCompatActivity() {
                 return@register
             }
             cameraHelperX.startCamera(binding.previewView, cameraSelector)
+            binding.tvResult.text = "正在检测人脸…"
         }.run { launch(Manifest.permission.CAMERA) }
 
         binding.btnSwitchCamera.setOnClickListener {
@@ -41,24 +46,28 @@ class FaceCameraRecognizeActivity : AppCompatActivity() {
                 CameraSelector.DEFAULT_FRONT_CAMERA
             }
             cameraHelperX.startCamera(binding.previewView, cameraSelector)
+            binding.tvResult.text = "已切换摄像头，正在检测…"
         }
 
         binding.btnChangeDB.setOnClickListener {
             val basePath = application.let {
                 it.getExternalFilesDir("")?.absolutePath ?: it.filesDir.path
             }
-            if (InspireFaceConfig.dbHelper?.dbPath?.endsWith("face_name_1.db") == false) {
-                InspireFaceConfig.switchDB(
-                    "$basePath/face_characteristic_1.db",
-                    "$basePath/face_name_1.db",
-                )
-            } else {
+            val isFirstDb = InspireFaceConfig.dbHelper?.dbPath?.endsWith("face_name_1.db") ?: false
+            val success = if (isFirstDb) {
                 InspireFaceConfig.switchDB(
                     "$basePath/face_characteristic_2.db",
                     "$basePath/face_name_2.db",
                 )
+            } else {
+                InspireFaceConfig.switchDB(
+                    "$basePath/face_characteristic_1.db",
+                    "$basePath/face_name_1.db",
+                )
             }
-            Toast.makeText(this, "切换数据库成功", Toast.LENGTH_SHORT).show()
+            val message = if (success) "已切换数据库" else "切换数据库失败"
+            Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+            binding.tvResult.text = message
         }
 
         cameraHelperX.onBitmapReady = lambda@{ bitmap ->
@@ -83,7 +92,10 @@ class FaceCameraRecognizeActivity : AppCompatActivity() {
         val startTime1 = System.currentTimeMillis()
         val stream = InspireFace.CreateImageStreamFromBitmap(bitmap, InspireFace.CAMERA_ROTATION_0) ?: return
         try {
-            val session = InspireFaceConfig.session ?: return
+            val session = InspireFaceConfig.session ?: run {
+                runOnUiThreadSafe { binding.tvResult.text = "SDK 未初始化，请到设置中检查模型" }
+                return
+            }
             val faces = InspireFace.ExecuteFaceTrack(session, stream) ?: return
             val endTime1 = System.currentTimeMillis() - startTime1
 
@@ -106,31 +118,44 @@ class FaceCameraRecognizeActivity : AppCompatActivity() {
                     continue
                 }
                 val result = InspireFace.FeatureHubFaceSearch(feature) ?: continue
-                val name = if (result.id >= 0) {
+                val name = if (result.feature != null) {
                     InspireFaceConfig.dbHelper?.queryNameById(result.id.toInt())
                 } else {
                     null
                 }
                 // 1.2.4 起无匹配时 id 为 -1、置信度为 -1，此时只显示"未知"
-                names[i] = if (name.isNullOrEmpty()) "未知" else
-                    "$name ${String.format("%.2f", result.searchConfidence * 100.0)}%"
+                val percent = if (name.isNullOrEmpty()) {
+                    0.0
+                } else {
+                    runCatching {
+                        InspireFace.CosineSimilarityConvertToPercentage(result.searchConfidence) * 100.0
+                    }.getOrDefault(result.searchConfidence * 100.0)
+                }
+                names[i] = if (name.isNullOrEmpty()) {
+                    "未知"
+                } else {
+                    "$name ${String.format("%.1f", percent)}%"
+                }
                 if (!name.isNullOrEmpty()) {
                     val endTime2 = System.currentTimeMillis() - startTime2
-                    tvResult += "\n人脸${i + 1}:$name ${String.format("%.2f", result.searchConfidence * 100.0)}% 识别:${endTime2}ms "
+                    tvResult += "\n人脸${i + 1}:$name ${String.format("%.1f", percent)}% 识别:${endTime2}ms "
                 }
             }
 
-            val living = FloatArray(faces.detectedNum) { 0.0f }
             val faceList = mutableListOf<List<Point2f>>()
+            val living = mutableListOf<Float>()
+            val displayNames = mutableListOf<String>()
             for (i in 0 until faces.detectedNum) {
                 val facePoints = InspireFace.GetFaceDenseLandmarkFromFaceToken(faces.tokens[i]) ?: continue
                 faceList.add(facePoints.toList())
+                living.add(0f)
+                displayNames.add(names[i])
             }
 
             runOnUiThreadSafe {
                 binding.faceOverlayView.setPreviewSize(bitmap.width, bitmap.height)
                 binding.tvResult.text = tvResult
-                binding.faceOverlayView.setFacePoints(faceList, living, names)
+                binding.faceOverlayView.setFacePoints(faceList, living.toFloatArray(), displayNames.toTypedArray())
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -140,7 +165,9 @@ class FaceCameraRecognizeActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        cameraHelperX.onBitmapReady = null
+        if (::cameraHelperX.isInitialized) {
+            cameraHelperX.onBitmapReady = null
+        }
         super.onDestroy()
     }
 }

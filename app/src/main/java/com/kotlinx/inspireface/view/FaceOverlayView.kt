@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.RectF
 import android.util.AttributeSet
 import android.util.Size
 import android.view.View
@@ -27,15 +28,17 @@ class FaceOverlayView(context: Context, attrs: AttributeSet? = null) : View(cont
 
     // 定义画笔 1号人脸
     val cornerPaint1 = Paint().apply {
-        color = Color.GREEN
+        color = Color.parseColor("#34D399")
         style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
         isAntiAlias = true
     }
 
     // 定义画笔 其他人脸
     val cornerPaint2 = Paint().apply {
-        color = Color.LTGRAY
+        color = Color.parseColor("#CCE2E8F0")
         style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
         isAntiAlias = true
     }
 
@@ -44,7 +47,16 @@ class FaceOverlayView(context: Context, attrs: AttributeSet? = null) : View(cont
         color = Color.WHITE
         isAntiAlias = true
         textAlign = Paint.Align.LEFT
+        isFakeBoldText = true
     }
+
+    private val labelBackgroundPaint = Paint().apply {
+        color = Color.argb(200, 11, 16, 32)
+        isAntiAlias = true
+        style = Paint.Style.FILL
+    }
+
+    private val labelRect = RectF()
 
     // 定义画笔 点
     private val pointPaint = Paint().apply {
@@ -90,28 +102,20 @@ class FaceOverlayView(context: Context, attrs: AttributeSet? = null) : View(cont
         updateTransformations()
     }
 
-    // 计算缩放和偏移以匹配 PreviewView 的 fitCenter 行为
+    // 计算缩放和偏移以匹配 PreviewView 的 fillCenter（居中裁剪）行为
     private fun updateTransformations() {
         if (displaySize.width == 0 || displaySize.height == 0 || previewSize.width == 0 || previewSize.height == 0) {
             return
         }
 
-        val viewAspectRatio = displaySize.width.toFloat() / displaySize.height
-        val previewAspectRatio = previewSize.width.toFloat() / previewSize.height
-
-        if (viewAspectRatio > previewAspectRatio) {
-            // 上下有黑边
-            scaleFactor = displaySize.height.toFloat() / previewSize.height
-            val scaledWidth = previewSize.width * scaleFactor
-            offsetX = (displaySize.width - scaledWidth) / 2f
-            offsetY = 0f
-        } else {
-            // 左右有黑边
-            scaleFactor = displaySize.width.toFloat() / previewSize.width
-            val scaledHeight = previewSize.height * scaleFactor
-            offsetX = 0f
-            offsetY = (displaySize.height - scaledHeight) / 2f
-        }
+        scaleFactor = max(
+            displaySize.width.toFloat() / previewSize.width,
+            displaySize.height.toFloat() / previewSize.height,
+        )
+        val scaledWidth = previewSize.width * scaleFactor
+        val scaledHeight = previewSize.height * scaleFactor
+        offsetX = (displaySize.width - scaledWidth) / 2f
+        offsetY = (displaySize.height - scaledHeight) / 2f
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -122,9 +126,9 @@ class FaceOverlayView(context: Context, attrs: AttributeSet? = null) : View(cont
         val density = resources.displayMetrics.density
 
         // 定义L形线段长度（根据密度调整）
-        val cornerLength = 10f * density
-        cornerPaint1.strokeWidth = 2f * density
-        cornerPaint2.strokeWidth = 2f * density
+        val cornerLength = 18f * density
+        cornerPaint1.strokeWidth = 3f * density
+        cornerPaint2.strokeWidth = 2.5f * density
         textPaint.textSize = 12f * density // 根据像素密度动态调整文字大小
 
         for (i in 0 until pointsLists.size) {
@@ -181,13 +185,24 @@ class FaceOverlayView(context: Context, attrs: AttributeSet? = null) : View(cont
             }
             // 绘制用户名
             if (name.isNotEmpty()) {
-                // 计算文字宽度
-                val textWidth = textPaint.measureText(name)
-                // 计算矩形框宽度
-                val rectWidth = right - left
-                // 计算居中时的起始x坐标
-                val textX = left + (rectWidth - textWidth) / 2
-                canvas.drawText(name, textX, top - 2 * density, textPaint)
+                val fm = textPaint.fontMetrics
+                val paddingH = 8f * density
+                val paddingV = 4f * density
+                val labelHeight = (fm.descent - fm.ascent) + paddingV * 2
+                val labelWidth = textPaint.measureText(name) + paddingH * 2
+                val labelTop = (top - labelHeight - 6f * density).coerceAtLeast(2f * density)
+                val labelLeft = left.coerceIn(
+                    2f * density,
+                    (width - labelWidth - 2f * density).coerceAtLeast(2f * density),
+                )
+                labelRect.set(labelLeft, labelTop, labelLeft + labelWidth, labelTop + labelHeight)
+                canvas.drawRoundRect(labelRect, 8f * density, 8f * density, labelBackgroundPaint)
+                canvas.drawText(
+                    name,
+                    labelRect.left + paddingH,
+                    labelRect.top + paddingV - fm.ascent,
+                    textPaint,
+                )
             }
 
             // 绘制关键点

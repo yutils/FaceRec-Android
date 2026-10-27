@@ -2,4 +2,46 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <color name="brand_primary">#4F46E5</color>
+    <color name="brand_on_primary">#FFFFFFFF</color>
+    <color name="brand_primary_container">#E0E7FF</color>
+    <color name="brand_on_primary_container">#312E81</color>
+    <color name="brand_primary_soft">#EEF2FF</color>
+    <color name="brand_secondary">#0284C7</color>
+    <color name="brand_secondary_soft">#E0F2FE</color>
+    <color name="brand_violet">#7C3AED</color>
+    <color name="brand_violet_soft">#F3E8FF</color>
+    <color name="brand_emerald">#059669</color>
+    <color name="brand_emerald_soft">#D1FAE5</color>
+    <color name="brand_amber">#D97706</color>
+    <color name="brand_amber_soft">#FEF3C7</color>
+    <color name="brand_rose">#E11D48</color>
+    <color name="brand_rose_soft">#FFE4E6</color>
+
+    <color name="app_background">#F3F4FA</color>
+    <color name="card_surface">#FFFFFFFF</color>
+    <color name="card_surface_alt">#F1F3FA</color>
+    <color name="text_primary">#111827</color>
+    <color name="text_secondary">#667085</color>
+    <color name="text_tertiary">#98A2B3</color>
+    <color name="outline">#E2E6F0</color>
+    <color name="outline_variant">#EDEFF7</color>
+    <color name="success">#059669</color>
+    <color name="warning">#D97706</color>
+    <color name="error">#DC2626</color>
+    <color name="error_container">#FEE2E2</color>
+    <color name="on_error_container">#991B1B</color>
+    <color name="warning_container">#FEF3C7</color>
+    <color name="on_warning_container">#92400E</color>
+
+    <color name="header_gradient_start">#4F46E5</color>
+    <color name="header_gradient_end">#7C3AED</color>
+    <color name="header_subtitle">#DDE3FF</color>
+    <color name="preview_background">#0B1020</color>
+    <color name="camera_scrim">#660B1020</color>
+    <color name="glass_white">#26FFFFFF</color>
+    <color name="glass_white_stroke">#40FFFFFF</color>
+    <color name="white_70">#B3FFFFFF</color>
+    <color name="white_20">#33FFFFFF</color>
 </resources>

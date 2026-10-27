@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="brand_primary">#A5B4FC</color>
+    <color name="brand_on_primary">#1E1B4B</color>
+    <color name="brand_primary_container">#312E81</color>
+    <color name="brand_on_primary_container">#E0E7FF</color>
+    <color name="brand_primary_soft">#1F2445</color>
+    <color name="brand_secondary">#38BDF8</color>
+    <color name="brand_secondary_soft">#0C2B3E</color>
+    <color name="brand_violet">#C4B5FD</color>
+    <color name="brand_violet_soft">#2A1B44</color>
+    <color name="brand_emerald">#34D399</color>
+    <color name="brand_emerald_soft">#0C2F27</color>
+    <color name="brand_amber">#FBBF24</color>
+    <color name="brand_amber_soft">#3A2A08</color>
+    <color name="brand_rose">#FB7185</color>
+    <color name="brand_rose_soft">#3B1220</color>
+
+    <color name="app_background">#0B1020</color>
+    <color name="card_surface">#151B2E</color>
+    <color name="card_surface_alt">#1E263C</color>
+    <color name="text_primary">#F8FAFC</color>
+    <color name="text_secondary">#94A3B8</color>
+    <color name="text_tertiary">#64748B</color>
+    <color name="outline">#2A3350</color>
+    <color name="outline_variant">#232B42</color>
+    <color name="success">#34D399</color>
+    <color name="warning">#FBBF24</color>
+    <color name="error">#F87171</color>
+    <color name="error_container">#450A0A</color>
+    <color name="on_error_container">#FECACA</color>
+    <color name="warning_container">#3A2A08</color>
+    <color name="on_warning_container">#FDE68A</color>
+
+    <color name="header_gradient_start">#4338CA</color>
+    <color name="header_gradient_end">#6D28D9</color>
+    <color name="header_subtitle">#C7D2FE</color>
+    <color name="preview_background">#05070F</color>
+    <color name="camera_scrim">#80050A16</color>
+    <color name="glass_white">#26FFFFFF</color>
+    <color name="glass_white_stroke">#33FFFFFF</color>
+    <color name="white_70">#B3FFFFFF</color>
+    <color name="white_20">#33FFFFFF</color>
+</resources>
