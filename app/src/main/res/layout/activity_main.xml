@@ -8,6 +8,13 @@
         android:orientation="vertical"
         android:padding="24dp">
 
+        <TextView
+            android:id="@+id/tvCurrentModel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:textSize="14sp" />
+
         <Button
             android:id="@+id/btnRegister"
             android:layout_width="match_parent"
@@ -41,5 +48,12 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
             android:text="用户列表" />
+
+        <Button
+            android:id="@+id/btnSettings"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="设置（切换模型）" />
     </LinearLayout>
 </layout>

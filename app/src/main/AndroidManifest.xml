@@ -33,6 +33,7 @@
         <activity android:name="com.kotlinx.inspireface.FaceCameraRecognizeActivity" />
         <activity android:name="com.kotlinx.inspireface.FaceCameraRegisterActivity" />
         <activity android:name="com.kotlinx.inspireface.UserListActivity" />
+        <activity android:name="com.kotlinx.inspireface.SettingsActivity" />
     </application>
 
 </manifest>

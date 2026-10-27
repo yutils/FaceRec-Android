@@ -66,8 +66,18 @@ object InspireFaceConfig {
     @Volatile
     private var initialized = false
 
+    /** 当前已加载的模型名，未加载时为 null */
+    @Volatile
+    var currentModelName: String? = null
+        private set
+
+    /** 不同模型资源推荐的余弦阈值不同，启动后从模型资源读取 */
+    @Volatile
+    private var searchThreshold = 0.42f
+
     fun ensureInitialized(context: Application) {
-        if (initialized && session != null && InspireFace.QueryLaunchStatus()) return
+        val selectedModel = ModelManager.selectedModel(context)
+        if (initialized && session != null && currentModelName == selectedModel && InspireFace.QueryLaunchStatus()) return
         init(context)
     }
 
@@ -76,7 +86,8 @@ object InspireFaceConfig {
         persistenceDbPath: String = context.let { (it.getExternalFilesDir("")?.absolutePath ?: it.filesDir.path) + "/face_characteristic_1.db" },
         faceNameDbPath: String = context.let { (it.getExternalFilesDir("")?.absolutePath ?: it.filesDir.path) + "/face_name_1.db" },
     ) {
-        if (initialized && session != null && InspireFace.QueryLaunchStatus()) {
+        val selectedModel = ModelManager.selectedModel(context)
+        if (initialized && session != null && currentModelName == selectedModel && InspireFace.QueryLaunchStatus()) {
             Log.d(TAG, "SDK 已初始化，跳过重复初始化")
             return
         }
@@ -89,20 +100,71 @@ object InspireFaceConfig {
         val version = InspireFace.QueryInspireFaceVersion()
         Log.i(TAG, "当前 InspireFaceSDK 版本: " + version.major + "." + version.minor + "." + version.patch)
 
-        val launchStatus = InspireFace.GlobalLaunch(context, InspireFace.PIKACHU)
-        Log.d(TAG, "InspireFaceSDK 启动状态: $launchStatus")
+        val modelFile = ModelManager.ensureModelFile(context, selectedModel)
+        if (modelFile == null) {
+            Log.e(TAG, "模型文件准备失败: $selectedModel")
+            initialized = false
+            session = null
+            currentModelName = null
+            return
+        }
+
+        val launchStatus = InspireFace.GlobalLaunch(modelFile.absolutePath)
+        Log.d(TAG, "InspireFaceSDK 启动状态: $launchStatus（模型：$selectedModel，路径：${modelFile.absolutePath}）")
         if (!launchStatus) {
             Log.e(TAG, "SDK 启动失败！")
             initialized = false
             session = null
+            currentModelName = null
             return
         }
 
+        currentModelName = selectedModel
+        searchThreshold = InspireFace.GetRecommendedCosineThreshold().takeIf { it > 0f } ?: 0.42f
+        Log.i(TAG, "模型 $selectedModel 推荐余弦阈值: $searchThreshold，特征长度: ${InspireFace.GetFeatureLength()}")
+
         setDB(persistenceDbPath, faceNameDbPath)
-        InspireFace.FeatureHubFaceSearchThresholdSetting(0.42f)
+        InspireFace.FeatureHubFaceSearchThresholdSetting(searchThreshold)
         session = InspireFace.CreateSession(customParameter, InspireFace.DETECT_MODE_ALWAYS_DETECT, 10, -1, -1)
         initialized = session != null
         Log.d(TAG, "Session 创建完成: ${session != null}")
+    }
+
+    /**
+     * 切换模型：释放当前 Session 与特征库，加载新模型后重建。
+     * 新模型加载失败时自动恢复到之前的模型。
+     */
+    fun switchModel(context: Application, modelName: String): Boolean {
+        if (ModelManager.options.none { it.name == modelName }) return false
+        return mutex {
+            if (initialized && session != null && currentModelName == modelName && InspireFace.QueryLaunchStatus()) {
+                return@mutex true
+            }
+            val previousModel = currentModelName ?: ModelManager.selectedModel(context)
+            Log.i(TAG, "切换模型: $previousModel -> $modelName")
+
+            val switched = try {
+                releaseInternal()
+                ModelManager.setSelectedModel(context, modelName)
+                init(context)
+                initialized
+            } catch (e: Exception) {
+                Log.e(TAG, "切换模型异常", e)
+                initialized = false
+                false
+            }
+
+            if (!switched) {
+                Log.e(TAG, "切换到 $modelName 失败，恢复模型 $previousModel")
+                ModelManager.setSelectedModel(context, previousModel)
+                try {
+                    init(context)
+                } catch (e: Exception) {
+                    Log.e(TAG, "恢复模型 $previousModel 失败", e)
+                }
+            }
+            switched
+        } ?: false
     }
 
     private var currentPersistenceDbPath = ""
@@ -121,7 +183,7 @@ object InspireFaceConfig {
         val configuration = InspireFace.CreateFeatureHubConfiguration()
             .setEnablePersistence(true)
             .setPersistenceDbPath(persistenceDbPath)
-            .setSearchThreshold(0.42f)
+            .setSearchThreshold(searchThreshold)
             .setSearchMode(InspireFace.SEARCH_MODE_EXHAUSTIVE)
             .setPrimaryKeyMode(InspireFace.PK_AUTO_INCREMENT)
 
@@ -296,6 +358,10 @@ object InspireFaceConfig {
             session = null
         }
         initialized = false
+        currentModelName = null
+        // 清空缓存路径，确保下次 init 会重新启用特征库
+        currentPersistenceDbPath = ""
+        currentFaceNameDbPath = ""
         dbHelper?.close()
         dbHelper = null
         if (InspireFace.QueryLaunchStatus()) {

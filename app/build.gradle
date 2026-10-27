@@ -35,6 +35,10 @@ android {
         buildConfig = true
         viewBinding = true
     }
+    androidResources {
+        // 模型是几十 MB 的二进制包，压缩收益很低，不压缩可加快首次复制
+        noCompress += ["Pikachu", "Megatron"]
+    }
 }
 dependencies {
     implementation libs.appcompat

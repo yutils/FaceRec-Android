@@ -18,7 +18,7 @@
 | --- | --- |
 | ABI | `arm64-v8a`、`armeabi-v7a`、`x86_64`（x86_64 用于模拟器调试，上游自 1.2.4 起提供） |
 | minSdk | **24**（1.2.4 起 native 库最低要求，`app` 与 `inspireface` 模块已同步） |
-| 模型 | 只保留 `Pikachu`（t4.0），未打包 61MB 的 `Megatron` |
+| 模型 | 内置 `Pikachu`（t4.0，17MB）与 `Megatron`（t4.0，61MB），与上游 SDK 仓库资源一致；默认使用 Megatron，可在 App 的「设置」中切换 |
 | 头文件/清单 | `inspireface/sdk/1.2.4/`（C 头文件、API manifest、SHA256SUMS） |
 
 升级要点：新版本在 native 失败时可能返回 `null`（`ExecuteFaceTrack` / `ExtractFaceFeature` /
@@ -29,7 +29,7 @@
 
 1. 替换 `inspireface/libs/<abi>/libInspireFace.so`，新增 `x86_64`
 2. 同步 `inspireface/src/main/java` 全部 Java 源码（新增 JNI 全量接口、`FaceCapture`、快照等）
-3. 同步模型资源 `Pikachu`（t4.0）与 `version.txt`，更新 `consumer-rules.pro`（JNI 类保留规则）
+3. 同步模型资源 `Pikachu`（t4.0）、`Megatron`（t4.0）与 `version.txt`，更新 `consumer-rules.pro`（JNI 类保留规则）
 4. `inspireface` 与 `app` 的 `minSdk` 由 22 提升到 24，`abiFilters` 增加 `x86_64`
 
 
@@ -39,7 +39,7 @@
 
 ## 改进地方
 1. 做了UI界面 ，适配横屏安卓工控机，也适配手机app
-2. 为了优化APP体积，只保留InspireFace.PIKACHU 模型删除了 InspireFace.Megatron。觉得需要自己添加
+2. 内置 Pikachu 与 Megatron 两套模型，默认 Megatron，可在设置界面切换，切换后自动重建 Session 并使用该模型资源推荐的识别阈值
 3. 添加通过相册录入人脸，也可以批量读取文件夹内人脸
 4. 选择照片人脸识别
 5. 通过摄像头录入人脸信息
@@ -47,6 +47,8 @@
 7. 自建本地数据存放人脸id对应名称
 8. 可以查用户列表和删除用户特征值
 9. 采用kotlin语言开发
+
+> 注意：Pikachu 与 Megatron 使用不同的特征提取网络，已录入的人脸特征不能跨模型识别；切换模型后如需识别旧用户，请切回原模型或重新录入。
 
 
 ## 页面预览

@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import com.kotlinx.inspireface.config.InspireFaceConfig
+import com.kotlinx.inspireface.config.ModelManager
 import com.kotlinx.inspireface.databinding.ActivityMainBinding
 
 /**
@@ -42,6 +43,20 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnUserList.setOnClickListener {
             startActivity(Intent(this, UserListActivity::class.java))
+        }
+
+        binding.btnSettings.setOnClickListener {
+            startActivity(Intent(this, SettingsActivity::class.java))
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val current = InspireFaceConfig.currentModelName
+        binding.tvCurrentModel.text = if (current != null && InspireFaceConfig.session != null) {
+            "当前模型：${ModelManager.labelOf(current)}"
+        } else {
+            "当前模型：未加载"
         }
     }
 }
